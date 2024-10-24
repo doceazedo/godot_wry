@@ -1,12 +1,9 @@
 on:
   push:
-    branches:
-      - main
-      - linux
+    branches: main
   pull_request:
     types: [opened, synchronize, reopened]
-    branches:
-      - main
+    branches: main
 
 name: 🤖 GDExtension
 
