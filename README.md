@@ -34,7 +34,7 @@ WRY depends on [WebKitGTK](https://webkitgtk.org) to be installed to work on Lin
 
 ### Android/iOS
 
-WRY already has [mobile support](https://github.com/tauri-apps/wry?tab=readme-ov-file#android--ios). Contributions to implement Android and iOS are very welcome!
+WRY already has upstream [mobile support](https://github.com/tauri-apps/wry?tab=readme-ov-file#android--ios). Contributions to implement Android and iOS in this extension are very welcome!
 
 ## 🧰 Getting started
 
