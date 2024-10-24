@@ -38,17 +38,14 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
           strip: true
-      - name: Debug
-        run: pwd && ls -laR ./rust
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.platform.target }}
+          name: "${{ matrix.platform.target }}.zip"
           path: |
-            rust/target/${{ matrix.platform.target }}/release/libgodot_wry.so
-            rust/target/${{ matrix.platform.target }}/release/libgodot_wry.dylib
-            rust/target/${{ matrix.platform.target }}/release/godot_wry.dll
-            rust/target/${{ matrix.platform.target }}/release/WebView2Loader.dll
+            rust/target/${{ matrix.platform.target }}/release/*.dll
+            rust/target/${{ matrix.platform.target }}/release/*.so
+            rust/target/${{ matrix.platform.target }}/release/*.dylib
 
   zip:
     name: Zip GDExtension
@@ -61,8 +58,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: godot/addons/godot_wry/bin
-        # TODO: run: mv to correct paths
-      # TODO: zip
-      # TODO: upload final artifact
+          merge-multiple: true
+      - name: Display structure of downloaded files
+        run: ls -R your/destination/dir
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot_wry.zip
+          path: godot/addons
 
   #TODO: release:
