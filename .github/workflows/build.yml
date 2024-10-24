@@ -8,9 +8,11 @@ on:
     branches:
       - main
 
+name: 🤖 GDExtension
+
 jobs:
   build:
-    name: Build / ${{ matrix.platform.os-name }}
+    name: 🏗️ Build / ${{ matrix.platform.os-name }}
     strategy:
       matrix:
         platform:
@@ -48,7 +50,7 @@ jobs:
             rust/target/${{ matrix.platform.target }}/release/*.dylib
 
   zip:
-    name: 📚 Zip GDExtension
+    name: 📦 Package
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -59,12 +61,12 @@ jobs:
         with:
           path: godot/addons/godot_wry/bin
           merge-multiple: true
-      - name: Display structure of downloaded files
-        run: ls -R godot/addons/godot_wry/bin
+      - name: Clean files
+        run: rm -rf project.godot 2> /dev/null
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: godot_wry.zip
-          path: godot/addons
+          path: godot
 
   #TODO: release:
