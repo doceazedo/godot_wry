@@ -44,7 +44,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.platform.target }}
-          path: "./**/*.(so|dll|dylib)"
+          path: |
+            rust/target/${{ matrix.platform.target }}/release/libgodot_wry.so
+            rust/target/${{ matrix.platform.target }}/release/libgodot_wry.dylib
+            rust/target/${{ matrix.platform.target }}/release/godot_wry.dll
+            rust/target/${{ matrix.platform.target }}/release/WebView2Loader.dll
 
   zip:
     name: Zip GDExtension
