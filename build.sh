@@ -4,6 +4,7 @@ start=`date +%s`
 targets=(
   "aarch64-apple-darwin"
   "x86_64-pc-windows-gnu"
+  "aarch64-unknown-linux-gnu"
 )
 
 printf "Setting up...\n"
@@ -19,13 +20,15 @@ for target in "${targets[@]}"; do
 
   printf "Copying binaries...\n"
   mkdir -p "dist/addons/godot_wry/bin/$target"
-  find "rust/target/$target/release" \( -name "*.dylib" -o -name "*.dll" \) -exec cp {} "dist/addons/godot_wry/bin/$target" \;
+  find "rust/target/$target/release" \( -name "*.dylib" -o -name "*.dll" -o -name "*.so" \) -exec cp {} "dist/addons/godot_wry/bin/$target" \;
 
   printf "Built target $target successfully!\n"
 done
 
-printf "Zipping files...\n"
-(cd dist && zip -r "$(date '+%Y-%m-%d').zip" .)
+if [[ $* == *--zip* ]]; then
+  printf "Zipping files...\n"
+  (cd dist && zip -r "$(date '+%Y-%m-%d').zip" .)
+fi
 
 end=`date +%s`
 time_elapsed=$((end-start))

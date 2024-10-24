@@ -1,0 +1,59 @@
+on:
+  push:
+    branches:
+      - main
+      - linux
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build / ${{ matrix.platform.os-name }}
+    strategy:
+      matrix:
+        platform:
+          - os-name: 🐧 Linux 64-bit
+            runs-on: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os-name: 🍎 macOS ARM64
+            runs-on: macos-latest
+            target: aarch64-apple-darwin
+          - os-name: 🪟 Windows 64-bit
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.platform.runs-on }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Build binaries
+        uses: houseabsolute/actions-rust-cross@v0
+        with:
+          working-directory: "rust"
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          strip: true
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform.target }}
+          path: "rust/target/${{ matrix.platform.target }}/release/*.(dll|dylib|so)"
+
+  zip:
+    name: Zip GDExtension
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Download binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: godot/addons/godot_wry/bin
+        # TODO: run: mv to correct paths
+      # TODO: zip
+      # TODO: upload final artifact
+
+  #TODO: release:

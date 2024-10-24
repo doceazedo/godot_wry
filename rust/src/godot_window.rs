@@ -1,10 +1,10 @@
-use std::ffi::c_void;
+use std::ffi::{c_ulong, c_void};
 use std::mem::transmute;
 use std::num::{NonZero, NonZeroIsize};
 use std::ptr::NonNull;
 use godot::classes::display_server::HandleType;
 use godot::classes::DisplayServer;
-use raw_window_handle::{AppKitWindowHandle, HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle};
+use raw_window_handle::{AppKitWindowHandle, HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle, XlibWindowHandle};
 
 pub struct GodotWindow;
 
@@ -32,6 +32,19 @@ impl HasWindowHandle for GodotWindow {
                 RawWindowHandle::AppKit(AppKitWindowHandle::new({
                     let ptr: *mut c_void = transmute(window_handle);
                     NonNull::new(ptr).expect("Id<T> should never be null")
+                }))
+            ))
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        let display_server = DisplayServer::singleton();
+        let window_handle = display_server.window_get_native_handle(HandleType::WINDOW_HANDLE);
+        unsafe {
+            Ok(WindowHandle::borrow_raw(
+                RawWindowHandle::Xlib(XlibWindowHandle::new({
+                    window_handle as c_ulong
                 }))
             ))
         }
