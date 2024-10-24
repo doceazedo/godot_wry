@@ -48,7 +48,7 @@ jobs:
             rust/target/${{ matrix.platform.target }}/release/*.dylib
 
   zip:
-    name: Zip GDExtension
+    name: 📚 Zip GDExtension
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -60,7 +60,7 @@ jobs:
           path: godot/addons/godot_wry/bin
           merge-multiple: true
       - name: Display structure of downloaded files
-        run: ls -R your/destination/dir
+        run: ls -R godot/addons/godot_wry/bin
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
