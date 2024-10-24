@@ -4,10 +4,14 @@ compatibility_minimum = 4.1
 reloadable = true
 
 [libraries]
-windows.debug.x86_64   = "res://addons/godot_wry/bin/x86_64-pc-windows-gnu/godot_wry.dll"
-windows.release.x86_64 = "res://addons/godot_wry/bin/x86_64-pc-windows-gnu/godot_wry.dll"
+linux.debug.x86_64     = "res://addons/godot_wry/bin/x86_64-unknown-linux-gnu/libgodot_wry.so"
+linux.release.x86_64   = "res://addons/godot_wry/bin/x86_64-unknown-linux-gnu/libgodot_wry.so"
+
 macos.debug.arm64      = "res://addons/godot_wry/bin/aarch64-apple-darwin/libgodot_wry.dylib"
 macos.release.arm64    = "res://addons/godot_wry/bin/aarch64-apple-darwin/libgodot_wry.dylib"
+
+windows.debug.x86_64   = "res://addons/godot_wry/bin/x86_64-pc-windows-msvc/godot_wry.dll"
+windows.release.x86_64 = "res://addons/godot_wry/bin/x86_64-pc-windows-msvc/godot_wry.dll"
 
 [icons]
 WebView = "res://addons/godot_wry/icons/webview.svg"

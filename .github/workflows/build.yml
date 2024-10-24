@@ -43,7 +43,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.platform.target }}.zip"
+          name: ${{ matrix.platform.target }}
           path: |
             rust/target/${{ matrix.platform.target }}/release/*.dll
             rust/target/${{ matrix.platform.target }}/release/*.so
@@ -60,9 +60,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: godot/addons/godot_wry/bin
-          merge-multiple: true
       - name: Clean files
-        run: rm -rf project.godot 2> /dev/null
+        run: rm -rf godot/project.godot 2> /dev/null
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
