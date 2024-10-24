@@ -14,21 +14,23 @@ Alternatively, you can go to the [Releases](https://github.com/doceazedo/godot_w
 
 ## ⚙️ Supported platforms
 
-| Platform    | Support             | Web engine                 |
-| ----------- | ------------------- | -------------------------- |
-| **Windows** | ✅ Supported        | WebView 2 (Chromium)       |
-| **Mac**     | ✅ Supported        | WebKit                     |
-| **Linux**   | 🔄 Work in progress | WebKitGTK                  |
-| **Android** | 🚧 Planned          | Android WebView (Chromium) |
-| **iOS**     | 🚧 Planned          | WebKit                     |
+| Platform    | Support      | Web engine                 |
+| ----------- | ------------ | -------------------------- |
+| **Windows** | ✅ Supported | WebView 2 (Chromium)       |
+| **Mac**     | ✅ Supported | WebKit                     |
+| **Linux**   | ✅ Supported | WebKitGTK                  |
+| **Android** | 🚧 Planned   | Android WebView (Chromium) |
+| **iOS**     | 🚧 Planned   | WebKit                     |
 
 ### Windows
 
-Transparency is not supported on Windows 7, and WebView2 support is limited to version 109 for Windows 7 and 8/8.1.
+⁠Windows 7, 8 and 8.1 are not supported since February 2024 with Rust 1.76, even tho WRY still supports them.
+
+On Windows 10 (Version 1803 and later) and Windows 11, the WebView2 runtime is distributed as part of the operating system.
 
 ### Linux
 
-WRY requires [WebKitGTK](https://webkitgtk.org). So you need to make sure it is properly installed beforehand.
+WRY depends on [WebKitGTK](https://webkitgtk.org) to be installed to work on Linux.
 
 ### Android/iOS
 
@@ -83,6 +85,8 @@ Since WRY utilizes the system's native webview for HTML rendering, the results m
 It's important to note that WRY renders the webview directly within the window. This prevents rendering on 3D meshes and customizing the rendering process.
 
 If these limitations are significant for your use case, consider alternatives like [gdcef](https://github.com/Lecrapouille/gdcef) or [godot-webview](https://godotwebview.com/).
+
+Godot WRY does _not_ perform dependency checks. As of right now, game developers are responsible for ensuring all dependencies are present and handling missing libraries.
 
 ## 📝 TO-DO
 
