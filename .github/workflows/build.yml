@@ -38,6 +38,8 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
           strip: true
+      - name: Debug
+        run: pwd && ls -la
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
