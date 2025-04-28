@@ -78,7 +78,22 @@ impl IControl for WebView {
         }
     }
 
+    fn ready(&mut self) {
+        self.create_webview();
+    }
+
     fn process(&mut self, _delta: f64) {
+        self.update_webview();
+    }
+}
+
+#[godot_api]
+impl WebView {
+    #[signal]
+    fn ipc_message(message: GString);
+
+    #[func]
+    fn update_webview(&mut self) {
         if self.webview.is_none() { return }
 
         if self.base().get_screen_position() != self.previous_screen_position {
@@ -92,7 +107,8 @@ impl IControl for WebView {
         }
     }
 
-    fn ready(&mut self) {
+    #[func]
+    fn create_webview(&mut self) {
         let window = GodotWindow;
         let base = self.base().clone();
         let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
@@ -317,12 +333,6 @@ impl IControl for WebView {
 
         self.resize()
     }
-}
-
-#[godot_api]
-impl WebView {
-    #[signal]
-    fn ipc_message(message: GString);
 
     #[func]
     fn post_message(&self, message: GString) {
