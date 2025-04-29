@@ -1,8 +1,9 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
-use godot::classes::{Os, ProjectSettings};
+use godot::builtin::GString;
+use godot::classes::file_access::ModeFlags;
+use godot::classes::FileAccess;
 use http::{Request, Response};
 use http::header::CONTENT_TYPE;
 use lazy_static::lazy_static;
@@ -10,37 +11,40 @@ use lazy_static::lazy_static;
 pub fn get_res_response(
     request: Request<Vec<u8>>,
 ) -> Response<Cow<'static, [u8]>> {
-    let os = Os::singleton();
-    let root = if os.has_feature("editor") {
-        let project_settings = ProjectSettings::singleton();
-        PathBuf::from(String::from(project_settings.globalize_path("res://")))
-    } else {
-        let mut dir = PathBuf::from(String::from(os.get_executable_path()));
-        dir.pop();
-        dir
-    };
-
+    let root = PathBuf::from("res://");
     let path = format!("{}{}", request.uri().host().unwrap_or_default(), request.uri().path());
     let full_path = root.join(path);
-    if full_path.exists() && full_path.is_file() {
-        let extension = full_path.extension().unwrap_or_default().to_str().unwrap_or_default();
-        let content_type = MIME_TYPES.get(extension).unwrap_or(&"application/octet-stream").clone();
+    let full_path_str = GString::from(full_path.to_str().unwrap_or_default());
 
-        let content = Cow::from(fs::read(&full_path).expect("Failed to read file"));
-        
+    if !FileAccess::file_exists(&full_path_str) {
         return http::Response::builder()
-            .header(CONTENT_TYPE, content_type)
-            .status(200)
-            .body(content)
-            .expect("Failed to build 200 response");
-    }
-
-    http::Response::builder()
         .header(CONTENT_TYPE, "text/plain")
         .status(404)
-        .body(format!("Could not find file at {:?}", full_path).as_bytes().to_vec())
-        .expect("Failed to build 404 response")
-        .map(Into::into)
+        .body(Cow::from(format!("Could not find file at {:?}", full_path).as_bytes().to_vec()))
+        .expect("Failed to build 404 response");
+    }
+    
+    return FileAccess::open(&full_path_str, ModeFlags::READ)
+        .map(|file| {
+            let extension = full_path.extension().unwrap_or_default().to_str().unwrap_or_default();
+            let content_type = MIME_TYPES.get(extension).unwrap_or(&"application/octet-stream").clone();
+
+            let content_size: i64 = file.get_length().try_into().unwrap_or(0);
+
+            let content = file.get_buffer(content_size).as_slice().to_vec();
+            http::Response::builder()
+                .header(CONTENT_TYPE, content_type)
+                .status(200)
+                .body(Cow::from(content))
+                .expect("Failed to build 200 response")
+        })
+        .unwrap_or_else( || {
+            http::Response::builder()
+                .header(CONTENT_TYPE, "text/plain")
+                .status(404)
+                .body(Cow::from(format!("Could not find file at {:?}", full_path).as_bytes().to_vec()))
+                .expect("Failed to build 404 response")
+        });
 }
 
 lazy_static! {
