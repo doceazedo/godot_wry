@@ -7,8 +7,7 @@ use godot::prelude::*;
 use godot::classes::{Control, IControl, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
 use godot::global::{Key, MouseButton};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, GWL_STYLE};
+
 use wry::{WebViewBuilder, Rect, WebViewAttributes};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::http::Request;
@@ -18,6 +17,12 @@ use serde_json;
 use std::sync::Mutex;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::HWND;
+
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, GWL_STYLE};
 
 struct GodotWRY;
 
