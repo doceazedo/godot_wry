@@ -122,7 +122,6 @@ impl IControl for WebView {
             };
         }
 
-
         let base = self.base().clone();
         let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
             url: if self.html.is_empty() { Some(String::from(&self.url)) } else { None },
