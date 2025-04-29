@@ -61,6 +61,9 @@ jobs:
         run: |
           mkdir -p package/godot_wry
           mv godot/addons package/godot_wry
+          mkdir -p package/godot_wry/bin/libgodot_wry.framework/Resources
+          cp package/godot_wry/bin/libgodot_wry.dylib package/godot_wry/bin/libgodot_wry.framework/libgodot_wry.dylib
+          cp assets/Info.plist package/godot_wry/bin/libgodot_wry.framework/Resources/Info.plist
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

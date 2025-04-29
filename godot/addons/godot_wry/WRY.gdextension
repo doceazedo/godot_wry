@@ -7,11 +7,20 @@ reloadable = true
 linux.debug.x86_64     = "bin/x86_64-unknown-linux-gnu/libgodot_wry.so"
 linux.release.x86_64   = "bin/x86_64-unknown-linux-gnu/libgodot_wry.so"
 
-macos.debug.arm64      = "bin/aarch64-apple-darwin/libgodot_wry.dylib"
-macos.release.arm64    = "bin/aarch64-apple-darwin/libgodot_wry.dylib"
+macos.debug      = "bin/aarch64-apple-darwin/libgodot_wry.framework"
+macos.release    = "bin/aarch64-apple-darwin/libgodot_wry.framework"
 
 windows.debug.x86_64   = "bin/x86_64-pc-windows-msvc/godot_wry.dll"
 windows.release.x86_64 = "bin/x86_64-pc-windows-msvc/godot_wry.dll"
 
 [icons]
 WebView = "icons/webview.svg"
+
+[dependencies]
+
+macos.debug = {
+  "bin/aarch64-apple-darwin/libgodot_wry.framework" : "Contents/Frameworks"
+}
+macos.release = {
+  "bin/aarch64-apple-darwin/libgodot_wry.framework" : "Contents/Frameworks"
+}
