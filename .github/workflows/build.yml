@@ -37,6 +37,14 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
           strip: true
+      - name: Build macOS-specific library
+        if: ${{ matrix.platform.target == 'aarch64-apple-darwin' }}
+        run: |
+          mkdir rust/target/${{ matrix.platform.target }}/release/libgodot_wry.framework
+          mv rust/target/${{ matrix.platform.target }}/release/libgodot_wry.dylib \
+              rust/target/${{ matrix.platform.target }}/release/libgodot_wry.framework/libgodot_wry.dylib
+          mkdir rust/target/${{ matrix.platform.target }}/release/libgodot_wry.framework/Resources
+          cp assets/Info.plist rust/target/${{ matrix.platform.target }}/release/libgodot_wry.framework/Resources/Info.plist
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -45,6 +53,7 @@ jobs:
             rust/target/${{ matrix.platform.target }}/release/*.dll
             rust/target/${{ matrix.platform.target }}/release/*.so
             rust/target/${{ matrix.platform.target }}/release/*.dylib
+            rust/target/${{ matrix.platform.target }}/release/*.framework
 
   zip:
     name: 📦 Package
@@ -61,9 +70,6 @@ jobs:
         run: |
           mkdir -p package/godot_wry
           mv godot/addons package/godot_wry
-          mkdir -p package/godot_wry/bin/libgodot_wry.framework/Resources
-          cp package/godot_wry/bin/libgodot_wry.dylib package/godot_wry/bin/libgodot_wry.framework/libgodot_wry.dylib
-          cp assets/Info.plist package/godot_wry/bin/libgodot_wry.framework/Resources/Info.plist
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
