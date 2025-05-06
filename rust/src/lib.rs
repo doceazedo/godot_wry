@@ -4,7 +4,7 @@ mod protocols;
 use godot::global::MouseButtonMask;
 use godot::init::*;
 use godot::prelude::*;
-use godot::classes::{Control, IControl, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
+use godot::classes::{Control, DisplayServer, IControl, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
 use godot::global::{Key, MouseButton};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
@@ -104,24 +104,31 @@ impl WebView {
 
     #[func]
     fn update_webview(&mut self) {
-        if self.webview.is_none() { return }
+        if let Some(_) = &self.webview {
+            let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
 
-        let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
+            if self.base().get_screen_position() != self.previous_screen_position || viewport_size != self.previous_viewport_size {
+                self.previous_screen_position = self.base().get_screen_position();
+                self.previous_viewport_size = viewport_size;
+                self.resize();
+            }
 
-        if self.base().get_screen_position() != self.previous_screen_position || viewport_size != self.previous_viewport_size {
-            self.previous_screen_position = self.base().get_screen_position();
-            self.previous_viewport_size = viewport_size;
-            self.resize();
-        }
-
-        #[cfg(target_os = "linux")]
-        while gtk::events_pending() {
-            gtk::main_iteration_do(false);
+            #[cfg(target_os = "linux")]
+            while gtk::events_pending() {
+                gtk::main_iteration_do(false);
+            }
         }
     }
 
     #[func]
     fn create_webview(&mut self) {
+        let display_server = DisplayServer::singleton();
+        if display_server.get_name() == "headless".into()
+        {
+            godot_warn!("Godot WRY: Headless mode detected. webview will not be created.");
+            return;
+        }
+
         let window = GodotWindow;
 
         // remove WS_CLIPCHILDREN from the window style
