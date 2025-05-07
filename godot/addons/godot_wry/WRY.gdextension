@@ -7,8 +7,8 @@ reloadable = true
 linux.debug.x86_64     = "bin/x86_64-unknown-linux-gnu/libgodot_wry.so"
 linux.release.x86_64   = "bin/x86_64-unknown-linux-gnu/libgodot_wry.so"
 
-macos.debug      = "bin/aarch64-apple-darwin/libgodot_wry.framework"
-macos.release    = "bin/aarch64-apple-darwin/libgodot_wry.framework"
+macos.debug.arm64      = "bin/aarch64-apple-darwin/libgodot_wry.framework"
+macos.release.arm64    = "bin/aarch64-apple-darwin/libgodot_wry.framework"
 
 windows.debug.x86_64   = "bin/x86_64-pc-windows-msvc/godot_wry.dll"
 windows.release.x86_64 = "bin/x86_64-pc-windows-msvc/godot_wry.dll"
@@ -18,16 +18,15 @@ WebView = "icons/webview.svg"
 
 [dependencies]
 
-macos.debug = {
+macos.debug.arm64 = {
   "bin/aarch64-apple-darwin/libgodot_wry.framework" : "Contents/Frameworks"
 }
-macos.release = {
+macos.release.arm64 = {
   "bin/aarch64-apple-darwin/libgodot_wry.framework" : "Contents/Frameworks"
 }
 
-windows.debug = {
-    "bin/x86_64-pc-windows-msvc/godot_wry.dll" : "addons/godot_wry/bin/x86_64-pc-windows-msvc",
-}
-windows.release = {
-    "bin/x86_64-pc-windows-msvc/godot_wry.dll" : "addons/godot_wry/bin/x86_64-pc-windows-msvc",
-}
+windows.debug.x86_64 = { "bin/x86_64-pc-windows-msvc/godot_wry.dll" : "" }
+windows.release.x86_64 = { "bin/x86_64-pc-windows-msvc/godot_wry.dll" : "" }
+
+linux.debug.x86_64 = { "bin/x86_64-unknown-linux-gnu/libgodot_wry.so": "" }
+linux.release.x86_64 = { "bin/x86_64-unknown-linux-gnu/libgodot_wry.so": "" }
