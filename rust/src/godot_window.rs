@@ -59,8 +59,8 @@ impl HasWindowHandle for GodotWindow {
             let mut attributes = std::mem::MaybeUninit::new(attributes).assume_init();
 
             let ok = (xlib.XGetWindowAttributes)(
-                godot_display as _,
-                godot_window_xid as c_ulong,
+                display as _,
+                window_xid as c_ulong,
                 &mut attributes,
             );
 
@@ -71,8 +71,8 @@ impl HasWindowHandle for GodotWindow {
             let mut set_attributes: XSetWindowAttributes = std::mem::zeroed();
             set_attributes.event_mask = attributes.all_event_masks & !SubstructureNotifyMask & !SubstructureRedirectMask;
             let ok = (xlib.XChangeWindowAttributes)(
-                godot_display as _,
-                godot_window_xid as c_ulong,
+                display as _,
+                window_xid as c_ulong,
                 CWEventMask,
                 &mut set_attributes,
             );
