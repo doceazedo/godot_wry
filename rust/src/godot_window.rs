@@ -46,7 +46,7 @@ impl HasWindowHandle for GodotWindow {
 
         gtk::init().expect("Failed to initialize gtk");
         if !gtk::gdk::Display::default().unwrap().backend().is_x11() {
-            panic!("GDK backend must be X11, set environment variable GDK_BACKEND=x11");
+            panic!("GDK backend must be X11");
         }
         let xlib = Xlib::open().expect("Failed to open Xlib");
 
