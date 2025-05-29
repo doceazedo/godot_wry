@@ -24,10 +24,6 @@ use windows::Win32::Foundation::HWND;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, GWL_STYLE};
 
-#[cfg(target_os = "windows")]
-#[link(name = "wevtapi")]
-extern "system" {}
-
 struct GodotWRY;
 
 #[gdextension]
