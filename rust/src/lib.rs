@@ -62,6 +62,8 @@ struct WebView {
     focused_when_created: bool,
     #[export]
     forward_input_events: bool,
+    #[export]
+    autoplay: bool,
 }
 
 #[godot_api]
@@ -85,6 +87,7 @@ impl IControl for WebView {
             incognito: false,
             focused_when_created: true,
             forward_input_events: true,
+            autoplay: false,
         }
     }
 
@@ -162,6 +165,7 @@ impl WebView {
             clipboard: self.clipboard,
             incognito: self.incognito,
             focused: self.focused_when_created,
+            autoplay: self.autoplay,
             accept_first_mouse: true,
             ..Default::default()
         })
