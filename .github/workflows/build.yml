@@ -35,7 +35,6 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        if: ${{ matrix.platform.runs-on != 'windows-latest' }} # Windows uses the system Rust
         with:
           targets: ${{ matrix.platform.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.platform.target }}
 
