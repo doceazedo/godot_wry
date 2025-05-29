@@ -377,9 +377,9 @@ impl WebView {
     #[func]
     fn post_message(&self, message: GString) {
         if let Some(webview) = &self.webview {
-            let message = str::replace(&*String::from(message), "'", "\\'");
-            let script = str::replace("document.dispatchEvent(new CustomEvent('message', { detail: '{}' }))", "{}", &*message);
-            let _ = webview.evaluate_script(&*script);
+            let data = serde_json::json!({ "detail": String::from(message) });
+            let script = format!("document.dispatchEvent(new CustomEvent('message', {}))", data);
+            let _ = webview.evaluate_script(&script);
         }
     }
 
