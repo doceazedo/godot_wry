@@ -24,6 +24,12 @@ use windows::Win32::Foundation::HWND;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, GWL_STYLE};
 
+// Required for Windows to link against the wevtapi library for webview2,
+// not sure why webview2-com-sys doesn't do this automatically.
+#[cfg(target_os = "windows")]
+#[link(name = "wevtapi")]
+extern "system" {}
+
 struct GodotWRY;
 
 #[gdextension]
