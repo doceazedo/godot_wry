@@ -1,5 +1,5 @@
 fn main() {
-    if std::env::var("CARGO_CFG_WINDOWS").is_ok() {
+    if cfg!(target_os = "windows") {  
         println!("cargo:rustc-link-lib=wevtapi");
     }
 }
