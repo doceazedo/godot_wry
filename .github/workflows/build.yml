@@ -39,6 +39,15 @@ jobs:
         with:
           targets: ${{ matrix.platform.target == 'universal-apple-darwin' && 'aarch64-apple-darwin,x86_64-apple-darwin' || matrix.platform.target }}
 
+      - name: Setup MSVC
+        if: ${{ matrix.platform.runs-on == 'windows-latest' }}
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Add advapi32 lib
+        if: ${{ matrix.platform.runs-on == 'windows-latest' }}
+        run: echo "RUSTFLAGS=-L C:/Program Files (x86)/Windows Kits/10/Lib/10.0.*/um/x64 -l advapi32" >> $GITHUB_ENV
+        shell: bash
+
       - name: Install Just
         uses: extractions/setup-just@v1
 
