@@ -9,17 +9,17 @@ use godot::global::{Key, MouseButton};
 use godot::init::*;
 use godot::prelude::*;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-use tokio::sync::mpsc::Sender;
+use uuid::Uuid;
 
 use crate::godot_window::GodotWindow;
-use crate::protocols::{BoxFuture, get_ipc_response, get_res_response};
+use crate::protocols::{get_ipc_response, get_res_response};
 use lazy_static::lazy_static;
 use serde_json;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::http::Request;
-use wry::{Rect, WebViewAttributes, WebViewBuilder};
+use wry::{Rect, RequestAsyncResponder, WebViewAttributes, WebViewBuilder};
 
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::HWND;
@@ -45,7 +45,7 @@ struct WebView {
     webview: Option<wry::WebView>,
     previous_screen_position: Vector2,
     previous_viewport_size: Vector2i,
-    sender: Option<Sender<BoxFuture>>,
+    responders: Arc<Mutex<HashMap<Uuid, RequestAsyncResponder>>>,
     #[export]
     full_window_size: bool,
     #[export]
@@ -84,6 +84,7 @@ impl IControl for WebView {
             webview: None,
             previous_screen_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
+            responders: Arc::new(Mutex::new(HashMap::new())),
             full_window_size: true,
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
@@ -98,7 +99,6 @@ impl IControl for WebView {
             focused_when_created: true,
             forward_input_events: true,
             autoplay: false,
-            sender: None,
         }
     }
 
@@ -150,23 +150,6 @@ impl WebView {
             return;
         }
 
-        // create tokio runtime
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<BoxFuture>(128);
-        self.sender = Some(tx.clone());
-
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("Failed to create tokio runtime");
-
-        std::thread::spawn(move || {
-            runtime.block_on(async move {
-                while let Some(task) = rx.recv().await {
-                    tokio::spawn(task);
-                }
-            });
-        });
-
         let window = GodotWindow;
 
         // remove WS_CLIPCHILDREN from the window style
@@ -188,7 +171,9 @@ impl WebView {
             };
         }
 
-        let base = self.base().clone();
+        let base_ipc_handler = self.base().clone();
+        let base_ipc = self.base().clone();
+        let responders_clone = self.responders.clone();
         let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
             url: if self.html.is_empty() {
                 Some(String::from(&self.url))
@@ -217,7 +202,7 @@ impl WebView {
 
             if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
                 if let Some(event_type) = json_value.get("type").and_then(|t| t.as_str()) {
-                    if let Some(viewport) = base.clone().get_viewport() {
+                    if let Some(viewport) = base_ipc_handler.clone().get_viewport() {
                         match event_type {
                             "_mouse_move" => {
                                 let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0)
@@ -358,14 +343,14 @@ impl WebView {
             }
 
             // if we get here, this is a regular IPC message
-            base.clone()
+            base_ipc_handler.clone()
                 .emit_signal("ipc_message", &[body.to_variant()]);
         })
         .with_custom_protocol("res".into(), move |_webview_id, request| {
             get_res_response(request)
         })
         .with_asynchronous_custom_protocol("ipc".into(), move |_webview_id, request, responder| {
-            get_ipc_response(request, responder, tx.clone())
+            get_ipc_response(request, responder, base_ipc.clone(), responders_clone.clone());
         });
 
         if !self.url.is_empty() && !self.html.is_empty() {

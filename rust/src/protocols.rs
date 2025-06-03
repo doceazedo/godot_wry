@@ -1,17 +1,17 @@
-use godot::builtin::GString;
-use godot::classes::FileAccess;
+use godot::builtin::{Dictionary, GString};
+use godot::classes::{Control, FileAccess};
 use godot::classes::file_access::ModeFlags;
+use godot::meta::ToGodot;
+use godot::obj::Gd;
 use http::header::CONTENT_TYPE;
 use http::{Request, Response};
 use lazy_static::lazy_static;
+use uuid::Uuid;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::pin::Pin;
-use tokio::sync::mpsc::Sender;
+use std::sync::{Arc, Mutex};
 use wry::RequestAsyncResponder;
-
-pub type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
 
 pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let root = PathBuf::from("res://");
@@ -155,7 +155,8 @@ lazy_static! {
 pub fn get_ipc_response(
     request: Request<Vec<u8>>,
     responder: RequestAsyncResponder,
-    tx: Sender<BoxFuture>,
+    mut control: Gd<Control>,
+    responders: Arc<Mutex<HashMap<Uuid, RequestAsyncResponder>>>,
 ) {
     let host = request.uri().host().unwrap_or_default();
     if host != "localhost" {
@@ -171,24 +172,30 @@ pub fn get_ipc_response(
     }
 
     let path = request.uri().path();
-    if path.starts_with("/res") {
+    if path.starts_with("/plugin:res") {
         resolve_ipc_res(request, responder);
-    } else if path == "/rpc" {
-        // TODO: Handle RPC requests
-    } else if path == "/poll" {
-        // TODO: Handle polling requests
-    } else if path == "/fetch" {
-        // If your channel expects Pin<Box<dyn Future<Output = ()> + Send>>
-        let task: BoxFuture = Box::pin(async move {
-            resolve_fetch_res(responder).await
+    } else if path == "/plugin:invoke" {
+        let uuid = Uuid::new_v4();
+        responders.lock().expect("Failed to lock responders")
+                .insert(uuid, responder);
+
+        let mut dict_headers = Dictionary::new();
+        request.headers().iter().for_each(|(k, v)| {
+            _ = dict_headers.insert(GString::from(k.as_str()), GString::from(v.to_str().unwrap_or_default()));
         });
 
-        tx.blocking_send(task).expect("Failed to send fetch task to channel");
+        control.call_deferred("invoke", &[
+            GString::from(uuid.to_string()).to_variant(),
+            request.method().to_string().to_variant(),
+            request.uri().to_string().to_variant(),
+            dict_headers.to_variant(),
+            request.body().to_vec().to_variant(),
+        ]);
     } else {
         // unknown path, return 404
         return responder.respond(
             http::Response::builder()
-                .status(404)
+                .status(403)
                 .header(CONTENT_TYPE, "text/plain")
                 .body(Cow::from("Not Found: Unknown path").as_bytes().to_vec())
                 .expect("Failed to build 404 response"),
@@ -196,31 +203,11 @@ pub fn get_ipc_response(
     }
 }
 
-// fn wrapper<T, F>(f: F) -> Box<dyn Fn() -> BoxFuture>
-// where
-//     T: Future<Output = ()> + Send + 'static,
-//     F: Fn() -> T + 'static,
-// {
-//         Box::new(move || Box::pin(f()))
-// }
-
-async fn resolve_fetch_res(responder: RequestAsyncResponder) {
-    // This is a placeholder for the actual fetch resolution logic.
-    // You can implement your fetch logic here and respond accordingly.
-    responder.respond(
-        http::Response::builder()
-            .status(200)
-            .header(CONTENT_TYPE, "text/plain")
-            .body(Cow::from("Fetch response placeholder").as_bytes().to_vec())
-            .expect("Failed to build fetch response"),
-    );
-}
-
 pub fn resolve_ipc_res(request: Request<Vec<u8>>, responder: RequestAsyncResponder) {
     let path = request
         .uri()
         .path()
-        .trim_start_matches("/res")
+        .trim_start_matches("/plugin:res")
         .trim_start_matches("/");
     let full_path = PathBuf::from("res://").join(path);
     let full_path_str = GString::from(full_path.to_str().unwrap_or_default());
