@@ -1,48 +1,69 @@
+use godot::builtin::GString;
+use godot::classes::FileAccess;
+use godot::classes::file_access::ModeFlags;
+use http::header::CONTENT_TYPE;
+use http::{Request, Response};
+use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use godot::builtin::GString;
-use godot::classes::file_access::ModeFlags;
-use godot::classes::FileAccess;
-use http::{Request, Response};
-use http::header::CONTENT_TYPE;
-use lazy_static::lazy_static;
+use std::pin::Pin;
+use tokio::sync::mpsc::Sender;
+use wry::RequestAsyncResponder;
 
-pub fn get_res_response(
-    request: Request<Vec<u8>>,
-) -> Response<Cow<'static, [u8]>> {
+pub type BoxFuture = Pin<Box<dyn Future<Output = ()> + Send + 'static>>;
+
+pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let root = PathBuf::from("res://");
-    let path = format!("{}{}", request.uri().host().unwrap_or_default(), request.uri().path());
+    let path = format!(
+        "{}{}",
+        request.uri().host().unwrap_or_default(),
+        request.uri().path()
+    );
     let full_path = root.join(path);
     let full_path_str = GString::from(full_path.to_str().unwrap_or_default());
 
     if !FileAccess::file_exists(&full_path_str) {
         return http::Response::builder()
-        .header(CONTENT_TYPE, "text/plain")
-        .status(404)
-        .body(Cow::from(format!("Could not find file at {:?}", full_path).as_bytes().to_vec()))
-        .expect("Failed to build 404 response");
+            .header(CONTENT_TYPE, "text/plain")
+            .status(404)
+            .body(Cow::from(
+                format!("Could not find file at {:?}", full_path)
+                    .as_bytes()
+                    .to_vec(),
+            ))
+            .expect("Failed to build 404 response");
     }
-    
+
     return FileAccess::open(&full_path_str, ModeFlags::READ)
         .map(|file| {
-            let extension = full_path.extension().unwrap_or_default().to_str().unwrap_or_default();
-            let content_type = MIME_TYPES.get(extension).unwrap_or(&"application/octet-stream").clone();
+            let extension = full_path
+                .extension()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default();
+            let content_type = MIME_TYPES
+                .get(extension)
+                .unwrap_or(&"application/octet-stream");
 
             let content_size: i64 = file.get_length().try_into().unwrap_or(0);
 
             let content = file.get_buffer(content_size).as_slice().to_vec();
             http::Response::builder()
-                .header(CONTENT_TYPE, content_type)
+                .header(CONTENT_TYPE, *content_type)
                 .status(200)
                 .body(Cow::from(content))
                 .expect("Failed to build 200 response")
         })
-        .unwrap_or_else( || {
+        .unwrap_or_else(|| {
             http::Response::builder()
                 .header(CONTENT_TYPE, "text/plain")
                 .status(404)
-                .body(Cow::from(format!("Could not find file at {:?}", full_path).as_bytes().to_vec()))
+                .body(Cow::from(
+                    format!("Could not find file at {:?}", full_path)
+                        .as_bytes()
+                        .to_vec(),
+                ))
                 .expect("Failed to build 404 response")
         });
 }
@@ -129,4 +150,128 @@ lazy_static! {
         ("3g2", "video/3gpp2"),
         ("7z", "application/x-7z-compressed"),
     ]);
+}
+
+pub fn get_ipc_response(
+    request: Request<Vec<u8>>,
+    responder: RequestAsyncResponder,
+    tx: Sender<BoxFuture>,
+) {
+    let host = request.uri().host().unwrap_or_default();
+    if host != "localhost" {
+        // unknown host, return 403
+        responder.respond(
+            http::Response::builder()
+                .status(403)
+                .header(CONTENT_TYPE, "text/plain")
+                .body(Cow::from("Forbidden: Unknown host").as_bytes().to_vec())
+                .expect("Failed to build 403 response"),
+        );
+        return;
+    }
+
+    let path = request.uri().path();
+    if path.starts_with("/res") {
+        resolve_ipc_res(request, responder);
+    } else if path == "/rpc" {
+        // TODO: Handle RPC requests
+    } else if path == "/poll" {
+        // TODO: Handle polling requests
+    } else if path == "/fetch" {
+        // If your channel expects Pin<Box<dyn Future<Output = ()> + Send>>
+        let task: BoxFuture = Box::pin(async move {
+            resolve_fetch_res(responder).await
+        });
+
+        tx.blocking_send(task).expect("Failed to send fetch task to channel");
+    } else {
+        // unknown path, return 404
+        return responder.respond(
+            http::Response::builder()
+                .status(404)
+                .header(CONTENT_TYPE, "text/plain")
+                .body(Cow::from("Not Found: Unknown path").as_bytes().to_vec())
+                .expect("Failed to build 404 response"),
+        );
+    }
+}
+
+// fn wrapper<T, F>(f: F) -> Box<dyn Fn() -> BoxFuture>
+// where
+//     T: Future<Output = ()> + Send + 'static,
+//     F: Fn() -> T + 'static,
+// {
+//         Box::new(move || Box::pin(f()))
+// }
+
+async fn resolve_fetch_res(responder: RequestAsyncResponder) {
+    // This is a placeholder for the actual fetch resolution logic.
+    // You can implement your fetch logic here and respond accordingly.
+    responder.respond(
+        http::Response::builder()
+            .status(200)
+            .header(CONTENT_TYPE, "text/plain")
+            .body(Cow::from("Fetch response placeholder").as_bytes().to_vec())
+            .expect("Failed to build fetch response"),
+    );
+}
+
+pub fn resolve_ipc_res(request: Request<Vec<u8>>, responder: RequestAsyncResponder) {
+    let path = request
+        .uri()
+        .path()
+        .trim_start_matches("/res")
+        .trim_start_matches("/");
+    let full_path = PathBuf::from("res://").join(path);
+    let full_path_str = GString::from(full_path.to_str().unwrap_or_default());
+
+    if !FileAccess::file_exists(&full_path_str) {
+        responder.respond(
+            http::Response::builder()
+                .header(CONTENT_TYPE, "text/plain")
+                .status(404)
+                .body(Cow::from(
+                    format!("Could not find file at {:?}", full_path)
+                        .as_bytes()
+                        .to_vec(),
+                ))
+                .expect("Failed to build 404 response"),
+        );
+
+        return;
+    }
+
+    let response = FileAccess::open(&full_path_str, ModeFlags::READ)
+        .map(|file| {
+            let extension = full_path
+                .extension()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default();
+            let content_type = MIME_TYPES
+                .get(extension)
+                .unwrap_or(&"application/octet-stream");
+
+            let content_size: i64 = file.get_length().try_into().unwrap_or(0);
+
+            let content = file.get_buffer(content_size).as_slice().to_vec();
+            http::Response::builder()
+                .header(CONTENT_TYPE, *content_type)
+                .status(200)
+                .body(Cow::from(content))
+                .expect("Failed to build 200 response")
+        })
+        .unwrap_or_else(|| {
+            http::Response::builder()
+                .header(CONTENT_TYPE, "text/plain")
+                .status(404)
+                .body(Cow::from(
+                    format!("Could not find file at {:?}", full_path)
+                        .as_bytes()
+                        .to_vec(),
+                ))
+                .expect("Failed to build 404 response")
+        });
+
+    responder.respond(response);
 }
