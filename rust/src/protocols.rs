@@ -153,10 +153,10 @@ lazy_static! {
 }
 
 pub fn get_ipc_response(
-    request: Request<Vec<u8>>,
-    responder: RequestAsyncResponder,
     mut control: Gd<Control>,
     responders: Arc<Mutex<HashMap<Uuid, RequestAsyncResponder>>>,
+    request: Request<Vec<u8>>,
+    responder: RequestAsyncResponder,
 ) {
     let host = request.uri().host().unwrap_or_default();
     if host != "localhost" {
@@ -184,8 +184,8 @@ pub fn get_ipc_response(
             _ = dict_headers.insert(GString::from(k.as_str()), GString::from(v.to_str().unwrap_or_default()));
         });
 
-        control.call_deferred("invoke", &[
-            GString::from(uuid.to_string()).to_variant(),
+        control.call("invoke", &[
+            uuid.to_string().to_variant(),
             request.method().to_string().to_variant(),
             request.uri().to_string().to_variant(),
             dict_headers.to_variant(),

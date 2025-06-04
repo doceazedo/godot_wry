@@ -8,6 +8,7 @@ use godot::global::MouseButtonMask;
 use godot::global::{Key, MouseButton};
 use godot::init::*;
 use godot::prelude::*;
+use http::{HeaderName, HeaderValue, Response};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use uuid::Uuid;
 
@@ -46,6 +47,7 @@ struct WebView {
     previous_screen_position: Vector2,
     previous_viewport_size: Vector2i,
     responders: Arc<Mutex<HashMap<Uuid, RequestAsyncResponder>>>,
+
     #[export]
     full_window_size: bool,
     #[export]
@@ -116,6 +118,15 @@ impl WebView {
     #[signal]
     fn ipc_message(message: GString);
 
+    #[signal]
+    fn invoke_message(
+        uuid: GString,
+        method: GString,
+        uri: GString,
+        headers: Dictionary,
+        body: PackedByteArray,
+    );
+
     #[func]
     fn update_webview(&mut self) {
         if let Some(_) = &self.webview {
@@ -171,9 +182,9 @@ impl WebView {
             };
         }
 
-        let base_ipc_handler = self.base().clone();
-        let base_ipc = self.base().clone();
-        let responders_clone = self.responders.clone();
+        let base = self.base().clone();
+        let base_ipc_protocol = self.base().clone();
+        let responders = self.responders.clone();
         let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
             url: if self.html.is_empty() {
                 Some(String::from(&self.url))
@@ -202,7 +213,7 @@ impl WebView {
 
             if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
                 if let Some(event_type) = json_value.get("type").and_then(|t| t.as_str()) {
-                    if let Some(viewport) = base_ipc_handler.clone().get_viewport() {
+                    if let Some(viewport) = base.clone().get_viewport() {
                         match event_type {
                             "_mouse_move" => {
                                 let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0)
@@ -342,15 +353,13 @@ impl WebView {
                 }
             }
 
-            // if we get here, this is a regular IPC message
-            base_ipc_handler.clone()
-                .emit_signal("ipc_message", &[body.to_variant()]);
+            base.clone().emit_signal("ipc_message", &[body.to_variant()]);
         })
         .with_custom_protocol("res".into(), move |_webview_id, request| {
             get_res_response(request)
         })
         .with_asynchronous_custom_protocol("ipc".into(), move |_webview_id, request, responder| {
-            get_ipc_response(request, responder, base_ipc.clone(), responders_clone.clone());
+            get_ipc_response(base_ipc_protocol.clone(), responders.clone(), request, responder);
         });
 
         if !self.url.is_empty() && !self.html.is_empty() {
@@ -464,6 +473,44 @@ impl WebView {
             let data = serde_json::json!({ "detail": String::from(message) });
             let script = format!("document.dispatchEvent(new CustomEvent('message', {}))", data);
             let _ = webview.evaluate_script(&script);
+        }
+    }
+
+    #[func]
+    fn invoke_callback(&self, uuid: GString, code: i32, headers: Dictionary, body: PackedByteArray) {
+        if let Some(_) = &self.webview {
+            let uuid = Uuid::parse_str(&*String::from(uuid)).expect("Invalid UUID format");
+            let mut responders = self.responders.lock().unwrap();
+            if let Some(responder) = responders.remove(&uuid) {
+                
+                let mut res = Response::builder().status(code.try_into().unwrap_or(500));
+                {
+                    let headers_map = res.headers_mut().unwrap();
+                    headers.iter_shared().typed::<GString, GString>().for_each(|(k, v)| {
+                        headers_map.insert(
+                            HeaderName::from_bytes(k.to_string().as_bytes())
+                                .expect("Invalid header name"),
+                            HeaderValue::from_str(&*String::from(v))
+                                .expect("Invalid header value"),
+                        );
+                    });
+                }
+
+                responder.respond(
+                    res
+                        .body(body.to_vec())
+                        .expect("Failed to build response")
+                )
+            } else {
+                godot_error!("No responder found for UUID: {}", uuid);
+            }
+        }
+    }
+
+    #[func]
+    fn evaluate_script(&self, script: GString) {
+        if let Some(webview) = &self.webview {
+            let _ = webview.evaluate_script(&*String::from(script));
         }
     }
 
