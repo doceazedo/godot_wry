@@ -43,7 +43,7 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
     let mut content_range: Option<(u64, u64)> = None;
 
     // The client might request a file with Range,
-    // even if we set Accept-Ranges to none, Safari does this with loading media types.
+    // even if we set Accept-Ranges to none, Safari does this while loading media types.
     // So, we MUST implement the Content-Range logic to serve the file correctly.
     if let Some(range) = request.headers().get(RANGE) {
         let range_str = range.to_str().expect("failed to parse Range header");
