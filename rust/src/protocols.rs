@@ -50,7 +50,10 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
 
         // assuming the range header is in the format "bytes=start-end"
         let parts: Vec<&str> = range_str[6..].split('-').collect();
-        let (start, end) = (parts[0].parse::<u64>().expect("failed to parse range start"), parts[1].parse::<u64>().expect("failed to parse range end"));
+        let (start, end) = (
+            parts[0].parse::<u64>().expect("failed to parse range start"),
+            parts[1].parse::<u64>().expect("failed to parse range end")
+        );
 
         content_range = Some((start, end));
     }
