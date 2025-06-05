@@ -5,7 +5,7 @@ use godot::builtin::GString;
 use godot::classes::file_access::ModeFlags;
 use godot::classes::FileAccess;
 use http::{Request, Response};
-use http::header::{CONTENT_TYPE, RANGE};
+use http::header::{ACCEPT_RANGES, CONTENT_RANGE, CONTENT_TYPE, RANGE};
 use lazy_static::lazy_static;
 
 pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
@@ -66,8 +66,8 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                 if start >= file_size {
                     return http::Response::builder()
                         .header(CONTENT_TYPE, *content_type)
-                        .header("Accept-Ranges", "bytes")
-                        .header("Content-Range", format!("bytes */{}", file_size))
+                        .header(ACCEPT_RANGES, "bytes")
+                        .header(CONTENT_RANGE, format!("bytes */{}", file_size))
                         .status(416) // Range Not Satisfiable
                         .body(Cow::from(Vec::new()))
                         .expect("Failed to build 416 response");
@@ -85,8 +85,8 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
 
                 http::Response::builder()
                     .header(CONTENT_TYPE, *content_type)
-                    .header("Accept-Ranges", "bytes")
-                    .header("Content-Range", format!("bytes {}-{}/{}", start, end, file_size))
+                    .header(ACCEPT_RANGES, "bytes")
+                    .header(CONTENT_RANGE, format!("bytes {}-{}/{}", start, end, file_size))
                     .status(206)
                     .body(Cow::from(content))
                     .expect("Failed to build 206 response")
