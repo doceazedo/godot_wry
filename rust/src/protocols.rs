@@ -57,10 +57,10 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
 
     return FileAccess::open(&full_path_str, ModeFlags::READ)
         .map(|mut file| {
-            let file_size: i64 = file.get_length().try_into().unwrap_or(0);
+            let file_size: u64 = file.get_length().try_into().expect("failed to get file size");
 
             return if let Some((start, end)) = content_range {
-                if start >= file_size as u64 {
+                if start >= file_size {
                     return http::Response::builder()
                         .header(CONTENT_TYPE, *content_type)
                         .header("Accept-Ranges", "bytes")
@@ -70,8 +70,8 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                         .expect("Failed to build 416 response");
                 }
 
-                let end = if end == 0 || end >= file_size as u64 {
-                    file_size as u64 - 1
+                let end = if end == 0 || end >= file_size {
+                    file_size - 1
                 } else {
                     end
                 };
@@ -84,7 +84,6 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                     .header(CONTENT_TYPE, *content_type)
                     .header("Accept-Ranges", "bytes")
                     .header("Content-Range", format!("bytes {}-{}/{}", start, end, file_size))
-                    .header("Content-Length", content_size.to_string())
                     .status(206)
                     .body(Cow::from(content))
                     .expect("Failed to build 206 response")
