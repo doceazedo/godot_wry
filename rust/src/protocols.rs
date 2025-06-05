@@ -5,44 +5,107 @@ use godot::builtin::GString;
 use godot::classes::file_access::ModeFlags;
 use godot::classes::FileAccess;
 use http::{Request, Response};
-use http::header::CONTENT_TYPE;
+use http::header::{CONTENT_TYPE, RANGE};
 use lazy_static::lazy_static;
 
-pub fn get_res_response(
-    request: Request<Vec<u8>>,
-) -> Response<Cow<'static, [u8]>> {
+pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let root = PathBuf::from("res://");
-    let path = format!("{}{}", request.uri().host().unwrap_or_default(), request.uri().path());
+    let path = format!(
+        "{}{}",
+        request.uri().host().unwrap_or_default(),
+        request.uri().path()
+    );
     let full_path = root.join(path);
     let full_path_str = GString::from(full_path.to_str().unwrap_or_default());
 
     if !FileAccess::file_exists(&full_path_str) {
         return http::Response::builder()
-        .header(CONTENT_TYPE, "text/plain")
-        .status(404)
-        .body(Cow::from(format!("Could not find file at {:?}", full_path).as_bytes().to_vec()))
-        .expect("Failed to build 404 response");
+            .header(CONTENT_TYPE, "text/plain")
+            .status(404)
+            .body(Cow::from(
+                format!("Could not find file at {:?}", full_path)
+                    .as_bytes()
+                    .to_vec(),
+            ))
+            .expect("Failed to build 404 response");
     }
+
+    let extension = full_path
+            .extension()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or_default();
+
+    let content_type = MIME_TYPES
+            .get(extension)
+            .unwrap_or(&"application/octet-stream");
     
+    let mut content_range: Option<(u64, u64)> = None;
+
+    // The client might request a file with Range,
+    // even if we set Accept-Ranges to none, Safari does this with loading media types.
+    // So, we MUST implement the Content-Range logic to serve the file correctly.
+    if let Some(range) = request.headers().get(RANGE) {
+        let range_str = range.to_str().expect("failed to parse Range header");
+
+        // assuming the range header is in the format "bytes=start-end"
+        let parts: Vec<&str> = range_str[6..].split('-').collect();
+        let (start, end) = (parts[0].parse::<u64>().expect("failed to parse range start"), parts[1].parse::<u64>().expect("failed to parse range end"));
+
+        content_range = Some((start, end));
+    }
+
     return FileAccess::open(&full_path_str, ModeFlags::READ)
-        .map(|file| {
-            let extension = full_path.extension().unwrap_or_default().to_str().unwrap_or_default();
-            let content_type = MIME_TYPES.get(extension).unwrap_or(&"application/octet-stream").clone();
+        .map(|mut file| {
+            let file_size: i64 = file.get_length().try_into().unwrap_or(0);
 
-            let content_size: i64 = file.get_length().try_into().unwrap_or(0);
+            return if let Some((start, end)) = content_range {
+                if start >= file_size as u64 {
+                    return http::Response::builder()
+                        .header(CONTENT_TYPE, *content_type)
+                        .header("Accept-Ranges", "bytes")
+                        .header("Content-Range", format!("bytes */{}", file_size))
+                        .status(416) // Range Not Satisfiable
+                        .body(Cow::from(Vec::new()))
+                        .expect("Failed to build 416 response");
+                }
 
-            let content = file.get_buffer(content_size).as_slice().to_vec();
-            http::Response::builder()
-                .header(CONTENT_TYPE, content_type)
-                .status(200)
-                .body(Cow::from(content))
-                .expect("Failed to build 200 response")
-        })
-        .unwrap_or_else( || {
+                let end = if end == 0 || end >= file_size as u64 {
+                    file_size as u64 - 1
+                } else {
+                    end
+                };
+
+                let content_size = (end - start + 1) as i64;
+                file.seek(start);
+                let content = file.get_buffer(content_size).as_slice().to_vec();
+
+                http::Response::builder()
+                    .header(CONTENT_TYPE, *content_type)
+                    .header("Accept-Ranges", "bytes")
+                    .header("Content-Range", format!("bytes {}-{}/{}", start, end, file_size))
+                    .header("Content-Length", content_size.to_string())
+                    .status(206)
+                    .body(Cow::from(content))
+                    .expect("Failed to build 206 response")
+            } else {
+                let content_size = file_size as i64;
+                let content = file.get_buffer(content_size).as_slice().to_vec();
+                http::Response::builder()
+                    .header(CONTENT_TYPE, *content_type)
+                    .status(200)
+                    .body(Cow::from(content))
+                    .expect("Failed to build 200 response")
+            }
+        }).unwrap_or_else(|| {
             http::Response::builder()
                 .header(CONTENT_TYPE, "text/plain")
-                .status(404)
-                .body(Cow::from(format!("Could not find file at {:?}", full_path).as_bytes().to_vec()))
+                .status(500)
+                .body(Cow::from(
+                    format!("Failed to open at {:?}", full_path)
+                        .as_bytes()
+                        .to_vec(),
+                ))
                 .expect("Failed to build 404 response")
         });
 }
