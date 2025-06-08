@@ -6,10 +6,12 @@ use godot::init::*;
 use godot::prelude::*;
 use godot::classes::{Control, DisplayServer, IControl, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
 use godot::global::{Key, MouseButton};
+use http::{HeaderName, HeaderValue, Response};
 use lazy_static::lazy_static;
 use serde_json;
 use wry::RequestAsyncResponder;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use wry::{WebViewBuilder, Rect, WebViewAttributes};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
@@ -406,19 +408,32 @@ impl WebView {
     }
 
     #[func]
-    fn fill_invoke_callback(&self, id: GString, method: GString, uri: GString, headers: Dictionary, body: GString) {
-        let mut responders = self.invoke_responders.lock().unwrap();
-        if let Some(responder) = responders.remove(&id) {
-            let headers_map = headers.iter_shared().typed::<GString, Variant>();
-            let headers = headers_map.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-            let _ = responder.respond(
-                Request::builder()
-                    .method(method.to_string())
-                    .uri(uri.to_string())
-                    .headers(headers)
-                    .body(body.to_string())
-                    .unwrap(),
-            );
+    fn fill_invoke_callback(&self, id: GString, code: i64, headers: Dictionary, body: PackedByteArray) {
+        if let Some(_) = &self.webview {
+            let mut responders = self.invoke_responders.lock().unwrap();
+            if let Some(responder) = responders.remove(&id.to_string()) {
+                
+                let mut res = Response::builder().status(code.try_into().unwrap_or(500));
+                {
+                    let headers_map = res.headers_mut().unwrap();
+                    headers.iter_shared().typed::<GString, GString>().for_each(|(k, v)| {
+                        headers_map.insert(
+                            HeaderName::from_str(k.to_string().as_str())
+                                .expect("Invalid header name"),
+                            HeaderValue::from_str(&*String::from(v))
+                                .expect("Invalid header value"),
+                        );
+                    });
+                }
+
+                responder.respond(
+                    res
+                        .body(body.to_vec())
+                        .expect("Failed to build response")
+                )
+            } else {
+                godot_error!("No responder found for ID: {}", id.to_string());
+            }
         }
     }
 
