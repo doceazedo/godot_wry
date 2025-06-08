@@ -1,11 +1,28 @@
-use std::ffi::{c_ulong, c_void};
-use std::mem::transmute;
-use std::num::{NonZero, NonZeroIsize};
-use std::ptr::NonNull;
 use godot::classes::display_server::HandleType;
 use godot::classes::DisplayServer;
-use godot::global::godot_print;
-use raw_window_handle::{AppKitWindowHandle, HandleError, HasWindowHandle, RawWindowHandle, Win32WindowHandle, WindowHandle, XlibWindowHandle};
+use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle, WindowHandle};
+
+#[cfg(target_os = "windows")]
+use {
+    std::ffi::c_ulong,
+    std::num::{NonZero, NonZeroIsize},
+    raw_window_handle::{Win32WindowHandle}
+};
+
+#[cfg(target_os = "macos")]
+use {
+    raw_window_handle::{AppKitWindowHandle},
+    std::ffi::c_void,
+    std::mem::transmute,
+    std::ptr::NonNull,
+};
+
+#[cfg(target_os = "linux")]
+use {
+    std::ffi::c_ulong,
+    raw_window_handle::{XlibWindowHandle},
+};
+
 
 pub struct GodotWindow;
 
