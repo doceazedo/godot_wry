@@ -1,12 +1,12 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::path::PathBuf;
 use godot::builtin::GString;
 use godot::classes::file_access::ModeFlags;
 use godot::classes::FileAccess;
 use http::{Request, Response};
 use http::header::{ACCEPT_RANGES, CONTENT_RANGE, CONTENT_TYPE, RANGE};
 use lazy_static::lazy_static;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let root = PathBuf::from("res://");

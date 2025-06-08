@@ -6,16 +6,16 @@ use godot::init::*;
 use godot::prelude::*;
 use godot::classes::{Control, DisplayServer, IControl, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
 use godot::global::{Key, MouseButton};
-
+use lazy_static::lazy_static;
+use serde_json;
+use std::collections::HashMap;
+use std::sync::Mutex;
 use wry::{WebViewBuilder, Rect, WebViewAttributes};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::http::Request;
+
 use crate::godot_window::GodotWindow;
 use crate::protocols::get_res_response;
-use serde_json;
-use std::sync::Mutex;
-use lazy_static::lazy_static;
-use std::collections::HashMap;
 
 #[cfg(target_os = "windows")]
 use {
