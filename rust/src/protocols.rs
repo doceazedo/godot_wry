@@ -78,11 +78,7 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                         .expect("Failed to build 416 response");
                 }
 
-                let end = if end == 0 || end >= file_size {
-                    file_size - 1
-                } else {
-                    end
-                };
+                let end = if end == 0 || end >= file_size { file_size - 1 } else { end };
 
                 let content_size = (end - start + 1) as i64;
                 file.seek(start);
@@ -96,8 +92,7 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                     .body(Cow::from(content))
                     .expect("Failed to build 206 response")
             } else {
-                let content_size = file_size as i64;
-                let content = file.get_buffer(content_size).as_slice().to_vec();
+                let content = file.get_buffer(file_size as i64).as_slice().to_vec();
                 http::Response::builder()
                     .header(CONTENT_TYPE, *content_type)
                     .status(200)
