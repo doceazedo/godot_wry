@@ -56,7 +56,6 @@ impl HasWindowHandle for GodotWindow {
 
     #[cfg(target_os = "linux")]
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
-        use godot::classes::display_server;
         use gtk::gdk::prelude::DisplayExtManual;
         use x11_dl::xlib::{Xlib, CWEventMask, SubstructureNotifyMask, SubstructureRedirectMask, XSetWindowAttributes, XWindowAttributes};
 
