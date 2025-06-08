@@ -118,21 +118,6 @@ pub fn get_ipc_response(
     responder: RequestAsyncResponder,
     invoke_responders: Arc<Mutex<HashMap<String, RequestAsyncResponder>>>,
 ) {
-    // Handle CORS preflight requests more cleanly
-    if request.method() == http::Method::OPTIONS {
-        responder.respond(
-            http::Response::builder()
-                .status(204)
-                .header("Access-Control-Allow-Origin", "*")
-                .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
-                .header("Access-Control-Allow-Headers", "Content-Type, Authorization")
-                .header("Access-Control-Allow-Credentials", "true")
-                .body(Cow::from(Vec::new()))
-                .expect("Failed to build OPTIONS response"),
-        );
-        return;
-    }
-
     let path = request.uri().path();
     if path.starts_with("/plugin:invoke") {
         // Only register responder if "X-No-Responder" header is not present
