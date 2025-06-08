@@ -4,7 +4,6 @@ use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle, WindowHan
 
 #[cfg(target_os = "windows")]
 use {
-    std::ffi::c_ulong,
     std::num::{NonZero, NonZeroIsize},
     raw_window_handle::{Win32WindowHandle}
 };

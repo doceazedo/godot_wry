@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 #[cfg(target_os = "windows")]
 use {
-    raw_window_handle::RawWindowHandle,
+    raw_window_handle::{HasWindowHandle, RawWindowHandle},
     windows::Win32::Foundation::HWND,
 };
 
