@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use godot::builtin::{Dictionary, GString};
+use godot::builtin::{Array, GString};
 use godot::classes::file_access::ModeFlags;
 use godot::classes::{Control, FileAccess};
 use godot::meta::ToGodot;
@@ -123,10 +123,13 @@ pub fn get_ipc_response(
         // Only register responder if "X-No-Responder" header is not present
         let register_responder = !request.headers().contains_key("X-No-Responder");
 
-        let dict_headers = request.headers().iter().fold(Dictionary::new(), |mut dict, (k, v)| {
-            let _ = dict.insert(GString::from(k.as_str()), GString::from(v.to_str().unwrap_or_default()));
-            dict
-        });
+        let mut headers_array = Array::new();
+        for (k, v) in request.headers().iter() {
+            let mut tuple = Array::new();
+            tuple.push(&GString::from(k.as_str()).to_variant());
+            tuple.push(&GString::from(v.to_str().unwrap_or_default()).to_variant());
+            headers_array.push(&tuple.to_variant());
+        }
 
         let id = if register_responder { Uuid::new_v4().to_string() } else { String::new() };
 
@@ -141,7 +144,7 @@ pub fn get_ipc_response(
             id.to_variant(),
             request.method().to_string().to_variant(),
             request.uri().to_string().to_variant(),
-            dict_headers.to_variant(),
+            headers_array.to_variant(),
             request.body().to_vec().to_variant(),
         ]);
     } else {

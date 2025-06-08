@@ -408,7 +408,7 @@ impl WebView {
     }
 
     #[func]
-    fn fill_invoke_callback(&self, id: GString, code: i64, headers: Dictionary, body: PackedByteArray) {
+    fn fill_invoke_callback(&self, id: GString, code: i64, headers: Array<Variant>, body: PackedByteArray) {
         if let Some(_) = &self.webview {
             let mut responders = self.invoke_responders.lock().unwrap();
             if let Some(responder) = responders.remove(&id.to_string()) {
@@ -416,14 +416,19 @@ impl WebView {
                 let mut res = Response::builder().status(code.try_into().unwrap_or(500));
                 {
                     let headers_map = res.headers_mut().unwrap();
-                    headers.iter_shared().typed::<GString, GString>().for_each(|(k, v)| {
-                        headers_map.insert(
-                            HeaderName::from_str(k.to_string().as_str())
-                                .expect("Invalid header name"),
-                            HeaderValue::from_str(&*String::from(v))
-                                .expect("Invalid header value"),
-                        );
-                    });
+                    for header in headers.iter_shared() {
+                        let header_tuple: Array<Variant> = header.to::<Array<Variant>>(); header_tuple.get(1).and_then(|v| Some(v.to_string())).unwrap_or_default();
+
+                        if let Some(key) = header_tuple.get(0).and_then(|v| Some(v.to_string())) {
+                            if let Some(value) = header_tuple.get(1).and_then(|v| Some(v.to_string())) {
+                                if let Ok(header_name) = HeaderName::from_str(&key) {
+                                    headers_map.insert(header_name, HeaderValue::from_str(&value).expect("invalid header value"));
+                                } else {
+                                    godot_error!("Invalid header name: {}", key);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 responder.respond(
