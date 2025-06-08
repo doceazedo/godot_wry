@@ -1,12 +1,17 @@
-use godot::builtin::GString;
-use godot::classes::file_access::ModeFlags;
-use godot::classes::FileAccess;
-use http::{Request, Response};
-use http::header::{ACCEPT_RANGES, CONTENT_RANGE, CONTENT_TYPE, RANGE};
-use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use godot::builtin::{Dictionary, GString};
+use godot::classes::file_access::ModeFlags;
+use godot::classes::{Control, FileAccess};
+use godot::meta::ToGodot;
+use godot::obj::Gd;
+use http::{Request, Response};
+use http::header::{ACCEPT_RANGES, CONTENT_RANGE, CONTENT_TYPE, RANGE};
+use lazy_static::lazy_static;
+use uuid::Uuid;
+use wry::RequestAsyncResponder;
 
 pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let root = PathBuf::from("res://");
@@ -111,6 +116,66 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                 .expect("Failed to build 404 response")
         });
 }
+
+pub fn get_ipc_response(
+    mut control: Gd<Control>,
+    request: Request<Vec<u8>>,
+    responder: RequestAsyncResponder,
+    invoke_responders: Arc<Mutex<HashMap<String, RequestAsyncResponder>>>,
+) {
+    // Handle CORS preflight requests more cleanly
+    if request.method() == http::Method::OPTIONS {
+        responder.respond(
+            http::Response::builder()
+                .status(204)
+                .header("Access-Control-Allow-Origin", "*")
+                .header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+                .header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+                .header("Access-Control-Allow-Credentials", "true")
+                .body(Cow::from(Vec::new()))
+                .expect("Failed to build OPTIONS response"),
+        );
+        return;
+    }
+
+    let path = request.uri().path();
+    if path.starts_with("/plugin:invoke") {
+        // Only register responder if "X-No-Responder" header is not present
+        let register_responder = !request.headers().contains_key("X-No-Responder");
+
+        let dict_headers = request.headers().iter().fold(Dictionary::new(), |mut dict, (k, v)| {
+            let _ = dict.insert(GString::from(k.as_str()), GString::from(v.to_str().unwrap_or_default()));
+            dict
+        });
+
+        let id = if register_responder { Uuid::new_v4().to_string() } else { String::new() };
+
+        if !id.is_empty() {
+            invoke_responders
+                .lock()
+                .expect("Failed to lock responders")
+                .insert(id.clone(), responder);
+        }
+
+        control.emit_signal("invoke_message", &[
+            id.to_variant(),
+            request.method().to_string().to_variant(),
+            request.uri().to_string().to_variant(),
+            dict_headers.to_variant(),
+            request.body().to_vec().to_variant(),
+        ]);
+    } else {
+        // unknown path, return 404
+        return responder.respond(
+            http::Response::builder()
+                .status(404)
+                .header(CONTENT_TYPE, "text/plain")
+                .body(Cow::from("Not Found: Unknown path").as_bytes().to_vec())
+                .expect("Failed to build 404 response"),
+        );
+    }
+}
+
 
 lazy_static! {
     static ref MIME_TYPES: HashMap<&'static str, &'static str> = HashMap::from([
