@@ -9,11 +9,10 @@ use godot::global::{Key, MouseButton};
 use http::{HeaderName, HeaderValue, Response};
 use lazy_static::lazy_static;
 use serde_json;
-use wry::RequestAsyncResponder;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use wry::{WebViewBuilder, Rect, WebViewAttributes};
+use wry::{WebViewBuilder, Rect, RequestAsyncResponder, WebViewAttributes};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::http::Request;
 

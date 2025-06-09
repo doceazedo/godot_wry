@@ -1,7 +1,3 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
 use godot::builtin::{Array, GString};
 use godot::classes::file_access::ModeFlags;
 use godot::classes::{Control, FileAccess};
@@ -10,6 +6,10 @@ use godot::obj::Gd;
 use http::{Request, Response};
 use http::header::{ACCEPT_RANGES, CONTENT_RANGE, CONTENT_TYPE, RANGE};
 use lazy_static::lazy_static;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use wry::RequestAsyncResponder;
 
