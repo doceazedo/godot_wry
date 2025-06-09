@@ -3,7 +3,7 @@ use godot::classes::file_access::ModeFlags;
 use godot::classes::{Control, FileAccess};
 use godot::meta::ToGodot;
 use godot::obj::Gd;
-use http::{Request, Response};
+use http::{response, Request, Response};
 use http::header::{ACCEPT_RANGES, CONTENT_RANGE, CONTENT_TYPE, RANGE};
 use lazy_static::lazy_static;
 use std::borrow::Cow;
@@ -131,14 +131,21 @@ pub fn get_ipc_response(
 
     let id = if register_responder { Uuid::new_v4().to_string() } else { String::new() };
 
-    if !id.is_empty() {
+    if id.is_empty() {
+        // respond immediately if no responder is registered
+        responder.respond(response::Builder::new()
+            .status(201)
+            .header(CONTENT_TYPE, "text/plain")
+            .body(Cow::from("".as_bytes().to_vec()))
+            .expect("Failed to build response"));
+    } else {
         invoke_responders
             .lock()
             .expect("Failed to lock responders")
             .insert(id.clone(), responder);
     }
 
-    control.emit_signal("invoke_message", &[
+    control.emit_signal("ipc_request", &[
         id.to_variant(),
         request.method().to_string().to_variant(),
         request.uri().to_string().to_variant(),

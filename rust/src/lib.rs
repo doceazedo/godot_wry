@@ -44,7 +44,7 @@ struct WebView {
     webview: Option<wry::WebView>,
     previous_screen_position: Vector2,
     previous_viewport_size: Vector2i,
-    invoke_responders: Arc<Mutex<HashMap<String, RequestAsyncResponder>>>,
+    ipc_request_responders: Arc<Mutex<HashMap<String, RequestAsyncResponder>>>,
     #[export]
     full_window_size: bool,
     #[export]
@@ -83,7 +83,7 @@ impl IControl for WebView {
             webview: None,
             previous_screen_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
-            invoke_responders: Arc::new(Mutex::new(HashMap::new())),
+            ipc_request_responders: Arc::new(Mutex::new(HashMap::new())),
             full_window_size: true,
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
@@ -116,7 +116,7 @@ impl WebView {
     fn ipc_message(message: GString);
 
     #[signal]
-    fn invoke_message(id: GString, method: GString, uri: GString, headers: Dictionary, body: GString);
+    fn ipc_request(id: GString, method: GString, uri: GString, headers: Dictionary, body: GString);
 
     #[func]
     fn update_webview(&mut self) {
@@ -168,7 +168,7 @@ impl WebView {
 
         let base = self.base().clone();
         let base_ipc = self.base().clone();
-        let responders = self.invoke_responders.clone();
+        let responders = self.ipc_request_responders.clone();
 
         let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
             url: if self.html.is_empty() { Some(String::from(&self.url)) } else { None },
@@ -407,9 +407,9 @@ impl WebView {
     }
 
     #[func]
-    fn fill_invoke_callback(&self, id: GString, code: i64, headers: Array<Variant>, body: PackedByteArray) {
+    fn fill_ipc_request_callback(&self, id: GString, code: i64, headers: Array<Variant>, body: PackedByteArray) {
         if let Some(_) = &self.webview {
-            let mut responders = self.invoke_responders.lock().unwrap();
+            let mut responders = self.ipc_request_responders.lock().unwrap();
             if let Some(responder) = responders.remove(&id.to_string()) {
                 
                 let mut res = Response::builder().status(code.try_into().unwrap_or(500));
