@@ -116,7 +116,7 @@ impl WebView {
     fn ipc_message(message: GString);
 
     #[signal]
-    fn ipc_request(id: GString, method: GString, uri: GString, headers: Dictionary, body: GString);
+    fn ipc_request(id: GString, method: GString, uri: GString, headers: Array<Variant>, body: GString);
 
     #[func]
     fn update_webview(&mut self) {
