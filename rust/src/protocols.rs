@@ -118,47 +118,34 @@ pub fn get_ipc_response(
     responder: RequestAsyncResponder,
     invoke_responders: Arc<Mutex<HashMap<String, RequestAsyncResponder>>>,
 ) {
-    let path = request.uri().path();
-    if path.starts_with("/plugin:invoke") {
-        // Only register responder if "X-No-Responder" header is not present
-        let register_responder = !request.headers().contains_key("X-No-Responder");
+    // DO NOT register responder if "X-No-Responder" header is present
+    let register_responder = !request.headers().contains_key("X-No-Responder");
 
-        let mut headers_array = Array::new();
-        for (k, v) in request.headers().iter() {
-            let mut tuple = Array::new();
-            tuple.push(&GString::from(k.as_str()).to_variant());
-            tuple.push(&GString::from(v.to_str().unwrap_or_default()).to_variant());
-            headers_array.push(&tuple.to_variant());
-        }
-
-        let id = if register_responder { Uuid::new_v4().to_string() } else { String::new() };
-
-        if !id.is_empty() {
-            invoke_responders
-                .lock()
-                .expect("Failed to lock responders")
-                .insert(id.clone(), responder);
-        }
-
-        control.emit_signal("invoke_message", &[
-            id.to_variant(),
-            request.method().to_string().to_variant(),
-            request.uri().to_string().to_variant(),
-            headers_array.to_variant(),
-            request.body().to_vec().to_variant(),
-        ]);
-    } else {
-        // unknown path, return 404
-        return responder.respond(
-            http::Response::builder()
-                .status(404)
-                .header(CONTENT_TYPE, "text/plain")
-                .body(Cow::from("Not Found: Unknown path").as_bytes().to_vec())
-                .expect("Failed to build 404 response"),
-        );
+    let mut headers_array = Array::new();
+    for (k, v) in request.headers().iter() {
+        let mut tuple = Array::new();
+        tuple.push(&GString::from(k.as_str()).to_variant());
+        tuple.push(&GString::from(v.to_str().unwrap_or_default()).to_variant());
+        headers_array.push(&tuple.to_variant());
     }
-}
 
+    let id = if register_responder { Uuid::new_v4().to_string() } else { String::new() };
+
+    if !id.is_empty() {
+        invoke_responders
+            .lock()
+            .expect("Failed to lock responders")
+            .insert(id.clone(), responder);
+    }
+
+    control.emit_signal("invoke_message", &[
+        id.to_variant(),
+        request.method().to_string().to_variant(),
+        request.uri().to_string().to_variant(),
+        headers_array.to_variant(),
+        request.body().to_vec().to_variant(),
+    ]);
+}
 
 lazy_static! {
     static ref MIME_TYPES: HashMap<&'static str, &'static str> = HashMap::from([
