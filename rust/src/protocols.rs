@@ -57,7 +57,7 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
         let parts: Vec<&str> = range_str[6..].split('-').collect();
         if range_str.chars().nth(6) == Some('-') {
             // the range header is in the format "bytes=-end"
-            let end = parts[0].parse::<u64>().expect("failed to parse range end");
+            let end = parts[1].parse::<u64>().expect("failed to parse range end");
             content_range = Some((0, end));
         } else if range_str.chars().last() == Some('-') {
             // the range header is in the format "bytes=start-"
