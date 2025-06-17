@@ -1,12 +1,17 @@
-use godot::builtin::GString;
+use godot::builtin::{Array, GString};
 use godot::classes::file_access::ModeFlags;
-use godot::classes::FileAccess;
-use http::{Request, Response};
+use godot::classes::{Control, FileAccess};
+use godot::meta::ToGodot;
+use godot::obj::Gd;
+use http::{response, Request, Response};
 use http::header::{ACCEPT_RANGES, CONTENT_RANGE, CONTENT_TYPE, RANGE};
 use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use uuid::Uuid;
+use wry::RequestAsyncResponder;
 
 pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let root = PathBuf::from("res://");
@@ -50,12 +55,20 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
 
         // assuming the range header is in the format "bytes=start-end"
         let parts: Vec<&str> = range_str[6..].split('-').collect();
-        let (start, end) = (
-            parts[0].parse::<u64>().expect("failed to parse range start"),
-            parts[1].parse::<u64>().expect("failed to parse range end")
-        );
-
-        content_range = Some((start, end));
+        if range_str.chars().nth(6) == Some('-') {
+            // the range header is in the format "bytes=-end"
+            let end = parts[1].parse::<u64>().expect("failed to parse range end");
+            content_range = Some((0, end));
+        } else if range_str.chars().last() == Some('-') {
+            // the range header is in the format "bytes=start-"
+            let start = parts[0].parse::<u64>().expect("failed to parse range start");
+            content_range = Some((start, 0));
+        } else {
+            // the range header is in the format "bytes=start-end"
+            let start = parts[0].parse::<u64>().expect("failed to parse range start");
+            let end = parts[1].parse::<u64>().expect("failed to parse range end");
+            content_range = Some((start, end));
+        }
     }
 
     return FileAccess::open(&full_path_str, ModeFlags::READ)
@@ -73,11 +86,7 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                         .expect("Failed to build 416 response");
                 }
 
-                let end = if end == 0 || end >= file_size {
-                    file_size - 1
-                } else {
-                    end
-                };
+                let end = if end == 0 || end >= file_size { file_size - 1 } else { end };
 
                 let content_size = (end - start + 1) as i64;
                 file.seek(start);
@@ -91,8 +100,7 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                     .body(Cow::from(content))
                     .expect("Failed to build 206 response")
             } else {
-                let content_size = file_size as i64;
-                let content = file.get_buffer(content_size).as_slice().to_vec();
+                let content = file.get_buffer(file_size as i64).as_slice().to_vec();
                 http::Response::builder()
                     .header(CONTENT_TYPE, *content_type)
                     .status(200)
@@ -110,6 +118,48 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
                 ))
                 .expect("Failed to build 404 response")
         });
+}
+
+pub fn get_ipc_response(
+    mut control: Gd<Control>,
+    request: Request<Vec<u8>>,
+    responder: RequestAsyncResponder,
+    invoke_responders: Arc<Mutex<HashMap<String, RequestAsyncResponder>>>,
+) {
+    // DO NOT register responder if "X-No-Responder" header is present
+    let register_responder = !request.headers().contains_key("X-No-Responder");
+
+    let mut headers_array = Array::new();
+    for (k, v) in request.headers().iter() {
+        let mut tuple = Array::new();
+        tuple.push(&GString::from(k.as_str()).to_variant());
+        tuple.push(&GString::from(v.to_str().unwrap_or_default()).to_variant());
+        headers_array.push(&tuple.to_variant());
+    }
+
+    let id = if register_responder { Uuid::new_v4().to_string() } else { String::new() };
+
+    if id.is_empty() {
+        // respond immediately if no responder is registered
+        responder.respond(response::Builder::new()
+            .status(201)
+            .header(CONTENT_TYPE, "text/plain")
+            .body(Cow::from("".as_bytes().to_vec()))
+            .expect("Failed to build response"));
+    } else {
+        invoke_responders
+            .lock()
+            .expect("Failed to lock responders")
+            .insert(id.clone(), responder);
+    }
+
+    control.emit_signal("ipc_request", &[
+        id.to_variant(),
+        request.method().to_string().to_variant(),
+        request.uri().to_string().to_variant(),
+        headers_array.to_variant(),
+        request.body().to_vec().to_variant(),
+    ]);
 }
 
 lazy_static! {

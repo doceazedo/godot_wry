@@ -6,16 +6,18 @@ use godot::init::*;
 use godot::prelude::*;
 use godot::classes::{Control, DisplayServer, IControl, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
 use godot::global::{Key, MouseButton};
+use http::{HeaderName, HeaderValue, Response};
 use lazy_static::lazy_static;
 use serde_json;
 use std::collections::HashMap;
-use std::sync::Mutex;
-use wry::{WebViewBuilder, Rect, WebViewAttributes};
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+use wry::{WebViewBuilder, Rect, RequestAsyncResponder, WebViewAttributes};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::http::Request;
 
 use crate::godot_window::GodotWindow;
-use crate::protocols::get_res_response;
+use crate::protocols::{get_ipc_response, get_res_response};
 
 #[cfg(target_os = "windows")]
 use {
@@ -42,6 +44,7 @@ struct WebView {
     webview: Option<wry::WebView>,
     previous_screen_position: Vector2,
     previous_viewport_size: Vector2i,
+    ipc_request_responders: Arc<Mutex<HashMap<String, RequestAsyncResponder>>>,
     #[export]
     full_window_size: bool,
     #[export]
@@ -80,6 +83,7 @@ impl IControl for WebView {
             webview: None,
             previous_screen_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
+            ipc_request_responders: Arc::new(Mutex::new(HashMap::new())),
             full_window_size: true,
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
@@ -110,6 +114,9 @@ impl IControl for WebView {
 impl WebView {
     #[signal]
     fn ipc_message(message: GString);
+
+    #[signal]
+    fn ipc_request(id: GString, method: GString, uri: GString, headers: Array<Variant>, body: PackedByteArray);
 
     #[func]
     fn update_webview(&mut self) {
@@ -160,6 +167,9 @@ impl WebView {
         }
 
         let base = self.base().clone();
+        let base_ipc = self.base().clone();
+        let responders = self.ipc_request_responders.clone();
+
         let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
             url: if self.html.is_empty() { Some(String::from(&self.url)) } else { None },
             html: if self.url.is_empty() { Some(String::from(&self.html)) } else { None },
@@ -292,6 +302,9 @@ impl WebView {
             })
             .with_custom_protocol(
                 "res".into(), move |_webview_id, request| get_res_response(request),
+            )
+            .with_asynchronous_custom_protocol(
+                "ipc".into(), move |_webview_id, request, responder| get_ipc_response(base_ipc.clone(), request, responder, responders.clone())
             );
 
         if !self.url.is_empty() && !self.html.is_empty() {
@@ -390,6 +403,41 @@ impl WebView {
             let data = serde_json::json!({ "detail": String::from(message) });
             let script = format!("document.dispatchEvent(new CustomEvent('message', {}))", data);
             let _ = webview.evaluate_script(&script);
+        }
+    }
+
+    #[func]
+    fn fill_ipc_request_callback(&self, id: GString, code: i64, headers: Array<Variant>, body: PackedByteArray) {
+        if let Some(_) = &self.webview {
+            let mut responders = self.ipc_request_responders.lock().unwrap();
+            if let Some(responder) = responders.remove(&id.to_string()) {
+                
+                let mut res = Response::builder().status(code.try_into().unwrap_or(500));
+                {
+                    let headers_map = res.headers_mut().unwrap();
+                    for header in headers.iter_shared() {
+                        let header_tuple: Array<Variant> = header.to::<Array<Variant>>(); header_tuple.get(1).and_then(|v| Some(v.to_string())).unwrap_or_default();
+
+                        if let Some(key) = header_tuple.get(0).and_then(|v| Some(v.to_string())) {
+                            if let Some(value) = header_tuple.get(1).and_then(|v| Some(v.to_string())) {
+                                if let Ok(header_name) = HeaderName::from_str(&key) {
+                                    headers_map.insert(header_name, HeaderValue::from_str(&value).expect("invalid header value"));
+                                } else {
+                                    godot_error!("Invalid header name: {}", key);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                responder.respond(
+                    res
+                        .body(body.to_vec())
+                        .expect("Failed to build response")
+                )
+            } else {
+                godot_error!("No responder found for ID: {}", id.to_string());
+            }
         }
     }
 
