@@ -313,10 +313,10 @@ impl WebView {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_move',
-                        x: e.clientX,
-                        y: e.clientY,
-                        movementX: e.movementX,
-                        movementY: e.movementY,
+                        x: e.clientX * window.devicePixelRatio,
+                        y: e.clientY * window.devicePixelRatio,
+                        movementX: e.movementX * window.devicePixelRatio,
+                        movementY: e.movementY * window.devicePixelRatio,
                         button: e.button
                     }));
                 });
@@ -324,8 +324,8 @@ impl WebView {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_down',
-                        x: e.clientX,
-                        y: e.clientY,
+                        x: e.clientX * window.devicePixelRatio,
+                        y: e.clientY * window.devicePixelRatio,
                         button: e.button
                     }));
                 });
@@ -333,8 +333,8 @@ impl WebView {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_up', 
-                        x: e.clientX,
-                        y: e.clientY,
+                        x: e.clientX * window.devicePixelRatio,
+                        y: e.clientY * window.devicePixelRatio,
                         button: e.button
                     }));
                 });
@@ -344,15 +344,15 @@ impl WebView {
                     
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_down',
-                        x: e.clientX,
-                        y: e.clientY,
+                        x: e.clientX * window.devicePixelRatio,
+                        y: e.clientY * window.devicePixelRatio,
                         button: button
                     }));
                     
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_up',
-                        x: e.clientX,
-                        y: e.clientY,
+                        x: e.clientX * window.devicePixelRatio,
+                        y: e.clientY * window.devicePixelRatio,
                         button: button
                     }));
                 });
