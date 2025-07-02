@@ -39,28 +39,24 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
     let content_type = MIME_TYPES
             .get(extension)
             .unwrap_or(&"application/octet-stream");
-    
-    let mut content_range: Option<(u64, u64)> = None;
-
-    // The client might request a file with Range,
-    // even if we set Accept-Ranges to none, Safari does this while loading media types.
-    // So, we MUST implement the Content-Range logic to serve the file correctly.
-    if let Some(range) = request.headers().get(RANGE) {
-        let range_str = range.to_str().expect("failed to parse Range header");
-
-        // assuming the range header is in the format "bytes=start-end"
-        let parts: Vec<&str> = range_str[6..].split('-').collect();
-        let (start, end) = (
-            parts[0].parse::<u64>().expect("failed to parse range start"),
-            parts[1].parse::<u64>().expect("failed to parse range end")
-        );
-
-        content_range = Some((start, end));
-    }
 
     return FileAccess::open(&full_path_str, ModeFlags::READ)
         .map(|mut file| {
             let file_size: u64 = file.get_length().try_into().expect("failed to get file size");
+
+            // The client might request a file with Range,
+            // even if we set Accept-Ranges to none, Safari does this while loading media types.
+            // So, we MUST implement the Content-Range logic to serve the file correctly.
+            let mut content_range: Option<(u64, u64)> = None;
+            if let Some(range) = request.headers().get(RANGE) {
+                let range_str = range.to_str().expect("failed to parse Range header");
+
+                // the range header might be in the format "bytes=start-end", "bytes=start-", or "bytes=-end"
+                let parts: Vec<&str> = range_str[6..].split('-').collect();
+                let start = parts[0].parse::<u64>().unwrap_or(0);
+                let end = parts[1].parse::<u64>().unwrap_or(file_size - 1);
+                content_range = Some((start, end));
+            }
 
             return if let Some((start, end)) = content_range {
                 if start >= file_size {
