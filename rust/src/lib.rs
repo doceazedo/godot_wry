@@ -4,7 +4,7 @@ mod protocols;
 use godot::global::MouseButtonMask;
 use godot::init::*;
 use godot::prelude::*;
-use godot::classes::{Control, DisplayServer, IControl, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
+use godot::classes::{Control, DisplayServer, IControl, Input, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
 use godot::global::{Key, MouseButton};
 use lazy_static::lazy_static;
 use serde_json;
@@ -180,109 +180,104 @@ impl WebView {
                 
                 if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
                     if let Some(event_type) = json_value.get("type").and_then(|t| t.as_str()) {
-                        if let Some(viewport) = base.clone().get_viewport() {
-                            match event_type {
-                                "_mouse_move" => {
-                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    
-                                    let movement_x = json_value.get("movementX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let movement_y = json_value.get("movementY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    
-                                    let mut event = InputEventMouseMotion::new_gd();
-                                    event.set_position(Vector2::new(x, y));
-                                    event.set_global_position(Vector2::new(x, y));
-                                    
-                                    let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
-                                    event.set_button_mask(*button_mask);
-
-                                    event.set_relative(Vector2::new(movement_x, movement_y));
-                                    
-                                    let mut viewport = viewport.clone();
-                                    viewport.push_input(&event);
-                                    return;
-                                },
+                        match event_type {
+                            "_mouse_move" => {
+                                let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                 
-                                "_mouse_down" | "_mouse_up" => {
-                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let button = json_value.get("button").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                                    
-                                    let godot_button = match button {
-                                        0 => MouseButton::LEFT,
-                                        1 => MouseButton::MIDDLE,
-                                        2 => MouseButton::RIGHT,
-                                        3 => MouseButton::WHEEL_UP,
-                                        4 => MouseButton::WHEEL_DOWN,
-                                        _ => MouseButton::LEFT, // default to left button
-                                    };
-                                    
-                                    let pressed = event_type == "_mouse_down";
-                                    let mask = match godot_button {
-                                        MouseButton::LEFT => MouseButtonMask::LEFT,
-                                        MouseButton::RIGHT => MouseButtonMask::RIGHT,
-                                        MouseButton::MIDDLE => MouseButtonMask::MIDDLE,
-                                        _ => MouseButtonMask::default(),
-                                    };
-                                    
-                                    if godot_button != MouseButton::WHEEL_UP && godot_button != MouseButton::WHEEL_DOWN {
-                                        let mut button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
-                                        if pressed {
-                                            *button_mask = *button_mask | mask;
-                                        } else {
-                                            match godot_button {
-                                                MouseButton::LEFT => {
-                                                    if button_mask.is_set(MouseButtonMask::LEFT) {
-                                                        *button_mask = MouseButtonMask::from_ord(button_mask.ord() & !MouseButtonMask::LEFT.ord());
-                                                    }
-                                                },
-                                                MouseButton::RIGHT => {
-                                                    if button_mask.is_set(MouseButtonMask::RIGHT) {
-                                                        *button_mask = MouseButtonMask::from_ord(button_mask.ord() & !MouseButtonMask::RIGHT.ord());
-                                                    }
-                                                },
-                                                MouseButton::MIDDLE => {
-                                                    if button_mask.is_set(MouseButtonMask::MIDDLE) {
-                                                        *button_mask = MouseButtonMask::from_ord(button_mask.ord() & !MouseButtonMask::MIDDLE.ord());
-                                                    }
-                                                },
-                                                _ => {}
-                                            }
+                                let movement_x = json_value.get("movementX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                let movement_y = json_value.get("movementY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                
+                                let mut event = InputEventMouseMotion::new_gd();
+                                event.set_position(Vector2::new(x, y));
+                                event.set_global_position(Vector2::new(x, y));
+                                
+                                let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
+                                event.set_button_mask(*button_mask);
+
+                                event.set_relative(Vector2::new(movement_x, movement_y));
+                                
+                                Input::singleton().parse_input_event(&event);
+                                return;
+                            },
+                            
+                            "_mouse_down" | "_mouse_up" => {
+                                let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                let button = json_value.get("button").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                                
+                                let godot_button = match button {
+                                    0 => MouseButton::LEFT,
+                                    1 => MouseButton::MIDDLE,
+                                    2 => MouseButton::RIGHT,
+                                    3 => MouseButton::WHEEL_UP,
+                                    4 => MouseButton::WHEEL_DOWN,
+                                    _ => MouseButton::LEFT, // default to left button
+                                };
+                                
+                                let pressed = event_type == "_mouse_down";
+                                let mask = match godot_button {
+                                    MouseButton::LEFT => MouseButtonMask::LEFT,
+                                    MouseButton::RIGHT => MouseButtonMask::RIGHT,
+                                    MouseButton::MIDDLE => MouseButtonMask::MIDDLE,
+                                    _ => MouseButtonMask::default(),
+                                };
+                                
+                                if godot_button != MouseButton::WHEEL_UP && godot_button != MouseButton::WHEEL_DOWN {
+                                    let mut button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
+                                    if pressed {
+                                        *button_mask = *button_mask | mask;
+                                    } else {
+                                        match godot_button {
+                                            MouseButton::LEFT => {
+                                                if button_mask.is_set(MouseButtonMask::LEFT) {
+                                                    *button_mask = MouseButtonMask::from_ord(button_mask.ord() & !MouseButtonMask::LEFT.ord());
+                                                }
+                                            },
+                                            MouseButton::RIGHT => {
+                                                if button_mask.is_set(MouseButtonMask::RIGHT) {
+                                                    *button_mask = MouseButtonMask::from_ord(button_mask.ord() & !MouseButtonMask::RIGHT.ord());
+                                                }
+                                            },
+                                            MouseButton::MIDDLE => {
+                                                if button_mask.is_set(MouseButtonMask::MIDDLE) {
+                                                    *button_mask = MouseButtonMask::from_ord(button_mask.ord() & !MouseButtonMask::MIDDLE.ord());
+                                                }
+                                            },
+                                            _ => {}
                                         }
                                     }
-                                    
-                                    let mut event = InputEventMouseButton::new_gd();
-                                    event.set_button_index(godot_button);
-                                    event.set_position(Vector2::new(x, y));
-                                    event.set_global_position(Vector2::new(x, y));
-                                    event.set_pressed(pressed);
-                                    
-                                    let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
-                                    event.set_button_mask(*button_mask);
-                                    
-                                    let mut viewport = viewport.clone();
-                                    viewport.push_input(&event);
-                                    return;
-                                },
+                                }
                                 
-                                "_key_down" | "_key_up" => {
-                                    let key_str = json_value.get("key").and_then(|v| v.as_str()).unwrap_or("");
-                                    // let key_code = json_value.get("keyCode").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                                    
-                                    let mut event = InputEventKey::new_gd();
-                                    
-                                    let godot_key = GODOT_KEYS.get(key_str).copied().unwrap_or(Key::NONE);
-                                    
-                                    event.set_keycode(godot_key);
-                                    event.set_pressed(event_type == "_key_down");
-                                    
-                                    let mut input = Input::singleton();
-                                    input.parse_input_event(&event);
-                                    return;
-                                },
+                                let mut event = InputEventMouseButton::new_gd();
+                                event.set_button_index(godot_button);
+                                event.set_position(Vector2::new(x, y));
+                                event.set_global_position(Vector2::new(x, y));
+                                event.set_pressed(pressed);
                                 
-                                _ => {}
-                            }
+                                let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
+                                event.set_button_mask(*button_mask);
+                                
+                                Input::singleton().parse_input_event(&event);
+                                return;
+                            },
+                            
+                            "_key_down" | "_key_up" => {
+                                let key_str = json_value.get("key").and_then(|v| v.as_str()).unwrap_or("");
+                                // let key_code = json_value.get("keyCode").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                                
+                                let mut event = InputEventKey::new_gd();
+                                
+                                let godot_key = GODOT_KEYS.get(key_str).copied().unwrap_or(Key::NONE);
+                                
+                                event.set_keycode(godot_key);
+                                event.set_pressed(event_type == "_key_down");
+                                
+                                Input::singleton().parse_input_event(&event);
+                                return;
+                            },
+                            
+                            _ => {}
                         }
                     }
                 }
