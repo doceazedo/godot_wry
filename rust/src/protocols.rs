@@ -175,6 +175,7 @@ lazy_static! {
         ("txt", "text/plain"),
         ("vsd", "application/vnd.visio"),
         ("wav", "audio/wav"),
+        ("wasm", "application/wasm"),
         ("weba", "audio/webm"),
         ("webm", "video/webm"),
         ("webp", "image/webp"),
