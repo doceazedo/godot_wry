@@ -20,6 +20,7 @@ The fundamental `Control` node to present a webview.
 | incognito            | bool       | Run the webview with incognito mode.                                                                      |
 | focused_when_created | bool       | Webview will be focused when created.                                                                     |
 | forward_input_events | bool       | Mouse and keyboard events captured by the webview will be propagated to the game.                         |
+| context_menu         | bool       | Enables right-click context menus on **Windows**.                                                         |
 
 ## Methods
 

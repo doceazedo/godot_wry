@@ -70,6 +70,8 @@ struct WebView {
     forward_input_events: bool,
     #[export]
     autoplay: bool,
+    #[export]
+    context_menu: bool,
 }
 
 #[godot_api]
@@ -94,6 +96,7 @@ impl IControl for WebView {
             focused_when_created: true,
             forward_input_events: true,
             autoplay: false,
+            context_menu: true
         }
     }
 
@@ -160,7 +163,7 @@ impl WebView {
         }
 
         let base = self.base().clone();
-        let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
+        let mut webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
             url: if self.html.is_empty() { Some(String::from(&self.url)) } else { None },
             html: if self.url.is_empty() { Some(String::from(&self.html)) } else { None },
             transparent: self.transparent,
@@ -291,6 +294,11 @@ impl WebView {
 
         if !self.url.is_empty() && !self.html.is_empty() {
             godot_error!("[Godot WRY] You have entered both a URL and HTML code. You may only enter one at a time.")
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            webview_builder = wry::WebViewBuilderExtWindows::with_default_context_menus(webview_builder, self.context_menu);
         }
 
         let webview = webview_builder.build_as_child(&window).unwrap();
