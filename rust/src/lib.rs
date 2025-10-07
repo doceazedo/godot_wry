@@ -272,6 +272,11 @@ impl WebView {
                                 
                                 event.set_keycode(godot_key);
                                 event.set_pressed(event_type == "_key_down");
+
+                                event.set_shift_pressed(json_value.get("shift").and_then(|v| v.as_bool()).unwrap_or(false));
+                                event.set_ctrl_pressed(json_value.get("ctrl").and_then(|v| v.as_bool()).unwrap_or(false));
+                                event.set_alt_pressed(json_value.get("alt").and_then(|v| v.as_bool()).unwrap_or(false));
+                                event.set_meta_pressed(json_value.get("meta").and_then(|v| v.as_bool()).unwrap_or(false));
                                 
                                 Input::singleton().parse_input_event(&event);
                                 return;
@@ -353,20 +358,30 @@ impl WebView {
                 });
                 document.addEventListener('keydown', (e) => {
                     if (!document.hasFocus()) return;
+                    const isModifier = ["Alt", "Shift", "Control", "Meta"].includes(e.key);
                     window.ipc.postMessage(JSON.stringify({
                         type: '_key_down',
                         key: e.key,
                         code: e.code,
-                        keyCode: e.keyCode
+                        keyCode: e.keyCode,
+                        shift: isModifier ? false : e.shiftKey,
+                        ctrl: isModifier ? false : e.ctrlKey,
+                        alt: isModifier ? false : e.altKey,
+                        meta: isModifier ? false : e.metaKey
                     }));
                 });
                 document.addEventListener('keyup', (e) => {
                     if (!document.hasFocus()) return;
+                    const isModifier = ["Alt", "Shift", "Control", "Meta"].includes(e.key);
                     window.ipc.postMessage(JSON.stringify({
                         type: '_key_up',
                         key: e.key,
                         code: e.code,
-                        keyCode: e.keyCode
+                        keyCode: e.keyCode,
+                        shift: isModifier ? false : e.shiftKey,
+                        ctrl: isModifier ? false : e.ctrlKey,
+                        alt: isModifier ? false : e.altKey,
+                        meta: isModifier ? false : e.metaKey
                     }));
                 });
             "#;
