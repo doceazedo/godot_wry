@@ -4,22 +4,23 @@ The fundamental `Control` node to present a webview.
 
 ## Properties
 
-| Property             | Type       | Description                                                                                               |
-| -------------------- | ---------- | --------------------------------------------------------------------------------------------------------- |
-| full_window_size     | bool       | Webview will always be the same size as the viewport.                                                     |
-| url                  | String     | Initial URL to be loaded. This will override `html`.                                                      |
-| html                 | String     | HTML string to be loaded. This will be ignored if `url` is provided.                                      |
-| transparent          | bool       | Webview should be transparent.                                                                            |
-| autoplay             | bool       | Media can be played without user interaction.                                                             |
-| background_color     | Color      | **🚧 Not implemented.** Webview background color. This will be ignored if `transparent` is set to `true`. |
-| devtools             | bool       | Enables web inspector. To open it, you can call `open_devtools()`, or right click the page and open it.   |
-| headers              | Dictionary | **🚧 Not implemented.** Headers used when loading the requested URL.                                      |
-| user_agent           | String     | Custom user agent header.                                                                                 |
-| zoom_hotkeys         | bool       | Enables page zooming hotkeys.                                                                             |
-| clipboard            | bool       | Enables clipboard access on **Linux** and **Windows**. Always enabled on macOS.                           |
-| incognito            | bool       | Run the webview with incognito mode.                                                                      |
-| focused_when_created | bool       | Webview will be focused when created.                                                                     |
-| forward_input_events | bool       | Mouse and keyboard events captured by the webview will be propagated to the game.                         |
+| Property             | Type       | Description                                                                                                    |
+| -------------------- | ---------- | -------------------------------------------------------------------------------------------------------------- |
+| full_window_size     | bool       | Webview will always be the same size as the viewport.                                                          |
+| url                  | String     | Initial URL to be loaded. This will override `html`.                                                           |
+| html                 | String     | HTML string to be loaded. This will be ignored if `url` is provided.                                           |
+| user_data_directory  | String     | The directory that will be used for browsing data. Supports `user://`, absolute or relative file paths.        |
+| transparent          | bool       | Webview should be transparent.                                                                                 |
+| autoplay             | bool       | Media can be played without user interaction.                                                                  |
+| background_color     | Color      | **🚧 Not implemented.** Webview background color. This will be ignored if `transparent` is set to `true`.      |
+| devtools             | bool       | Enables web inspector. To open it, you can call `open_devtools()`, or right click the page and open it.        |
+| headers              | Dictionary | **🚧 Not implemented.** Headers used when loading the requested URL.                                           |
+| user_agent           | String     | Custom user agent header.                                                                                      |
+| zoom_hotkeys         | bool       | Enables page zooming hotkeys.                                                                                  |
+| clipboard            | bool       | Enables clipboard access on **Linux** and **Windows**. Always enabled on macOS.                                |
+| incognito            | bool       | Run the webview with incognito mode.                                                                           |
+| focused_when_created | bool       | Webview will be focused when created.                                                                          |
+| forward_input_events | bool       | Mouse and keyboard events captured by the webview will be propagated to the game.                              |
 
 ## Methods
 

@@ -4,13 +4,14 @@ mod protocols;
 use godot::global::MouseButtonMask;
 use godot::init::*;
 use godot::prelude::*;
-use godot::classes::{Control, DisplayServer, IControl, Input, InputEventMouseButton, InputEventMouseMotion, InputEventKey};
+use godot::classes::{Control, DisplayServer, IControl, Input, InputEventMouseButton, InputEventMouseMotion, InputEventKey, ProjectSettings};
 use godot::global::{Key, MouseButton};
 use lazy_static::lazy_static;
 use serde_json;
 use std::collections::HashMap;
 use std::sync::Mutex;
-use wry::{WebViewBuilder, Rect, WebViewAttributes};
+use std::path::PathBuf;
+use wry::{WebViewBuilder, WebContext, Rect, WebViewAttributes};
 use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::http::Request;
 
@@ -49,6 +50,8 @@ struct WebView {
     #[export]
     html: GString,
     #[export]
+    user_data_directory: GString,
+    #[export]
     transparent: bool,
     #[export]
     background_color: Color,
@@ -83,6 +86,7 @@ impl IControl for WebView {
             full_window_size: true,
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
+            user_data_directory: "".into(),
             transparent: false,
             background_color: Color::from_rgb(1.0, 1.0, 1.0),
             devtools: true,
@@ -160,7 +164,31 @@ impl WebView {
         }
 
         let base = self.base().clone();
+        let resolved_user_dir: Option<PathBuf> = if !self.user_data_directory.is_empty() {
+            let dir = self.user_data_directory.to_string();
+
+            if dir.starts_with("user://") {
+                let sub_path = dir.trim_start_matches("user://");
+
+                let ps = ProjectSettings::singleton();
+                let base_path = ps.globalize_path("user://").to_string();
+                let mut abs_path = PathBuf::from(base_path);
+                abs_path.push(sub_path);
+
+                std::fs::create_dir_all(&abs_path).ok();
+
+                Some(abs_path)
+            } else {
+                let path = PathBuf::from(&dir);
+                std::fs::create_dir_all(&path).ok();
+                Some(path)
+            }
+        } else {
+            None
+        };
+        let mut context = WebContext::new(resolved_user_dir);
         let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
+            context: Some(&mut context),
             url: if self.html.is_empty() { Some(String::from(&self.url)) } else { None },
             html: if self.url.is_empty() { Some(String::from(&self.html)) } else { None },
             transparent: self.transparent,
