@@ -15,7 +15,16 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
         request.uri().host().unwrap_or_default(),
         request.uri().path()
     );
-    let full_path = root.join(path);
+    let mut full_path = root.join(path);
+
+    if full_path.ends_with("/") || full_path.is_dir() || full_path.extension().is_none() {
+        let index_path = full_path.join("index.html");
+        
+        if FileAccess::file_exists(&GString::from(index_path.to_str().unwrap_or_default())) {
+            full_path = index_path;
+        }
+    }
+
     let full_path_str = GString::from(full_path.to_str().unwrap_or_default());
 
     if !FileAccess::file_exists(&full_path_str) {
