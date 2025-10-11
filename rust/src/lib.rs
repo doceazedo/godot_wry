@@ -502,6 +502,13 @@ impl WebView {
             let _ = webview.reload();
         }
     }
+
+    #[func]
+    fn zoom(&self, scale_factor: f64) {
+        if let Some(webview) = &self.webview {
+            let _ = webview.zoom(scale_factor);
+        }
+    }
 }
 
 lazy_static! {
