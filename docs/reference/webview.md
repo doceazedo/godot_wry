@@ -9,7 +9,7 @@ The fundamental `Control` node to present a webview.
 | full_window_size     | bool       | Webview will always be the same size as the viewport.                                                          |
 | url                  | String     | Initial URL to be loaded. This will override `html`.                                                           |
 | html                 | String     | HTML string to be loaded. This will be ignored if `url` is provided.                                           |
-| user_data_directory  | String     | The directory that will be used for browsing data. Supports `user://`, absolute or relative file paths.        |
+| data_directory  | String     | The directory for persisting internal webview data. Supports `user://`, absolute, or relative file paths.        |
 | transparent          | bool       | Webview should be transparent.                                                                                 |
 | autoplay             | bool       | Media can be played without user interaction.                                                                  |
 | background_color     | Color      | **🚧 Not implemented.** Webview background color. This will be ignored if `transparent` is set to `true`.      |
