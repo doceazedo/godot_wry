@@ -18,13 +18,14 @@ func _on_web_view_ipc_message(message):
 
 func _on_button_pressed():
 	#$Window.visible = !$Window.visible
-	$Window/WebView.load_url(\"res://addons/godot_wry/examples/build/index.html\")
+	$Window/WebView.load_url(\"res://addons/godot_wry/examples/character_creator_ui_demo/ui/build/index.html\")
 "
 
 [node name="Node2D" type="Node2D"]
 script = SubResource("GDScript_3s1y3")
 
 [node name="Window" type="Window" parent="."]
+oversampling_override = 1.0
 initial_position = 1
 size = Vector2i(640, 360)
 
@@ -42,5 +43,6 @@ offset_right = 8.0
 offset_bottom = 8.0
 text = "Debug"
 
+[connection signal="ipc_message" from="Window/WebView" to="." method="_on_web_view_ipc_message"]
 [connection signal="visibility_changed" from="Window/WebView" to="." method="_on_web_view_visibility_changed"]
 [connection signal="pressed" from="Button" to="." method="_on_button_pressed"]

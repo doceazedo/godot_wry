@@ -505,8 +505,15 @@ impl WebView {
 
     #[func]
     fn load_url(&self, url: GString) {
+        let mut url_str = String::from(url);
+
+        if let Some(stripped) = url_str.strip_prefix("res://") {
+            let path = stripped.replace("\\", "/");
+            url_str = format!("http://res.{}", path);
+        }
+
         if let Some(webview) = &self.webview {
-            let _ = webview.load_url(&*String::from(url));
+            let _ = webview.load_url(&url_str);
         }
     }
 
