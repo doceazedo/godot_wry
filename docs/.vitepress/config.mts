@@ -9,7 +9,7 @@ export default defineConfig({
     nav: [
       { text: "Guide", link: "/guide/what-is-godot-wry" },
       { text: "Reference", link: "/reference/webview" },
-      { text: "Examples", link: "/markdown-examples" },
+      { text: "Examples", link: "/examples/character-creation-ui" },
     ],
 
     sidebar: [
