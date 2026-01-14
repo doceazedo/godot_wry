@@ -113,6 +113,6 @@ The Godot WRY extension is licensed under [MIT](/LICENSE). WRY is licensed under
 
 Below is a list of interesting similar projects:
 
-- [gdcef](https://github.com/Lecrapouille/gdcef/tree/godot-4.x) — Open-source, powered by Chromium
+- [gdcef](https://github.com/Lecrapouille/gdcef/tree/godot-4.x) — Open-source, powered by Chromium (CEF)
 - [Godot-HTML](https://github.com/Decapitated/Godot-HTML) — Open-source, powered by Ultralight (WebKit)
-- [godot-webview](https://godotwebview.com/) — Commercial, powered by QT (Chromium/CEF)
+- [godot-webview](https://godotwebview.com/) — Commercial, powered by Qt6 (Chromium)
