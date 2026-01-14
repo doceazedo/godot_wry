@@ -81,7 +81,7 @@ export default defineConfig({
 
     footer: {
       message: "Released under the MIT license.",
-      copyright: "© 2025 Doce Fernandes & Godot WRY contributors",
+      copyright: "© 2026 Doce Fernandes & Godot WRY contributors",
     },
 
     externalLinkIcon: true,
