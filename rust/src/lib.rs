@@ -43,6 +43,7 @@ struct WebView {
     webview: Option<wry::WebView>,
     previous_screen_position: Vector2,
     previous_viewport_size: Vector2i,
+    previous_window_position: Vector2i,
     #[export]
     full_window_size: bool,
     #[export]
@@ -83,6 +84,7 @@ impl IControl for WebView {
             webview: None,
             previous_screen_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
+            previous_window_position: Vector2i::default(),
             full_window_size: true,
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
@@ -125,10 +127,16 @@ impl WebView {
     fn update_webview(&mut self) {
         if let Some(_) = &self.webview {
             let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
+            let window_position = DisplayServer::singleton().window_get_position();
 
-            if self.base().get_screen_position() != self.previous_screen_position || viewport_size != self.previous_viewport_size {
+            let needs_resize = self.base().get_screen_position() != self.previous_screen_position
+                || viewport_size != self.previous_viewport_size
+                || window_position != self.previous_window_position;
+
+            if needs_resize {
                 self.previous_screen_position = self.base().get_screen_position();
                 self.previous_viewport_size = viewport_size;
+                self.previous_window_position = window_position;
                 self.resize();
             }
 
