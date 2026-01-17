@@ -156,6 +156,15 @@ impl WebView {
             return;
         }
 
+        // Initialize GTK on Linux before any WebKitGTK operations
+        #[cfg(target_os = "linux")]
+        {
+            if gtk::init().is_err() {
+                godot_error!("Godot WRY: Failed to initialize GTK. WebView will not work.");
+                return;
+            }
+        }
+
         let window = GodotWindow;
 
         // remove WS_CLIPCHILDREN from the window style
