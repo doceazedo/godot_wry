@@ -11,7 +11,8 @@ config_version=5
 [application]
 
 config/name="WRY"
-config/features=PackedStringArray("4.2", "Forward Plus")
+config/features=PackedStringArray("4.5", "Forward Plus")
+config/icon="uid://c6iicr8hnjpnr"
 
 [display]
 
