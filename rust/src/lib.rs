@@ -525,14 +525,6 @@ impl WebView {
     }
 
     #[func]
-    fn is_visible(&self) -> bool {
-        if let Some(webview) = &self.webview {
-            return webview.is_visible();
-        }
-        false
-    }
-
-    #[func]
     fn set_visible(&self, visibility: bool) {
         if let Some(webview) = &self.webview {
             let _ = webview.set_visible(visibility);

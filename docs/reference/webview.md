@@ -279,21 +279,6 @@ func resize() -> void:
 
 **Returns:** `void`
 
-
-### is_visible()
-
-Returns if the webview is currently visible.
-
-<a class="button" href="https://docs.rs/wry/latest/wry/struct.WebView.html#method.is_visible" target="_blank">WRY Documentation</a>
-
-#### API
-
-```gdscript
-func is_visible() -> bool:
-```
-
-**Returns:** `bool`
-
 ### set_visible(...)
 
 Shows or hides the webview.
