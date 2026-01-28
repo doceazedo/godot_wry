@@ -53,6 +53,7 @@ struct WebView {
     #[export]
     data_directory: GString,
     #[export]
+    visible: bool,
     transparent: bool,
     #[export]
     background_color: Color,
@@ -89,6 +90,7 @@ impl IControl for WebView {
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
             data_directory: "user://".into(),
+            visible: true,
             transparent: false,
             background_color: Color::from_rgb(1.0, 1.0, 1.0),
             devtools: true,
@@ -205,6 +207,7 @@ impl WebView {
             context: Some(&mut context),
             url: if self.html.is_empty() { Some(String::from(&self.url)) } else { None },
             html: if self.url.is_empty() { Some(String::from(&self.html)) } else { None },
+            visible: self.visible,
             transparent: self.transparent,
             devtools: self.devtools,
             // headers: Some(HeaderMap::try_from(self.headers.iter_shared().typed::<GString, Variant>()).unwrap_or_default()),
@@ -519,6 +522,14 @@ impl WebView {
             webview.set_visible(visibility).expect("Could not set visibility");
             self.resize()
         }
+    }
+
+    #[func]
+    fn is_visible(&self) -> bool {
+        if let Some(webview) = &self.webview {
+            return webview.is_visible();
+        }
+        false
     }
 
     #[func]
