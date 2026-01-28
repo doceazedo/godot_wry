@@ -10,6 +10,7 @@ The fundamental `Control` node to present a webview.
 | url                  | String     | Initial URL to be loaded. This will override `html`.                                                           |
 | html                 | String     | HTML string to be loaded. This will be ignored if `url` is provided.                                           |
 | data_directory  | String     | The directory for persisting internal webview data. Supports `user://`, absolute, or relative file paths.        |
+| visible          | bool       | Webview should be visible.                                                                                 |
 | transparent          | bool       | Webview should be transparent.                                                                                 |
 | autoplay             | bool       | Media can be played without user interaction.                                                                  |
 | background_color     | Color      | **🚧 Not implemented.** Webview background color. This will be ignored if `transparent` is set to `true`.      |
