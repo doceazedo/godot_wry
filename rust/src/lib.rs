@@ -156,6 +156,9 @@ impl WebView {
             return;
         }
 
+        #[cfg(target_os = "linux")]
+        gtk::init().expect("Failed to initialize GTK");
+
         let window = GodotWindow;
 
         // remove WS_CLIPCHILDREN from the window style
