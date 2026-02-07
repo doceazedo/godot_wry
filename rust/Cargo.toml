@@ -18,3 +18,6 @@ gtk = "0.18.1"
 x11-dl = "2.21.0"
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61.1", features = ["Win32", "Win32_UI", "Win32_UI_WindowsAndMessaging", "Win32_System_Registry", "Win32_System_Diagnostics_Etw"]}
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25"
+objc = "0.2"
