@@ -74,6 +74,10 @@ struct WebView {
     forward_input_events: bool,
     #[export]
     autoplay: bool,
+    #[export]
+    drag_and_drop: bool,
+    new_window_req_handler: Callable,
+    navigation_handler: Callable,
 }
 
 #[godot_api]
@@ -100,6 +104,9 @@ impl IControl for WebView {
             focused_when_created: true,
             forward_input_events: true,
             autoplay: false,
+            drag_and_drop: false,
+            new_window_req_handler: Callable::invalid(),
+            navigation_handler: Callable::invalid(),
         }
     }
 
@@ -122,6 +129,9 @@ impl WebView {
 
     #[signal]
     fn page_load_finished(message: GString);
+    
+    #[signal]
+    fn document_title_changed(title: GString);
 
     #[func]
     fn update_webview(&mut self) {
@@ -204,6 +214,9 @@ impl WebView {
             None
         };
         let mut context = WebContext::new(resolved_data_directory);
+        let drag_and_drop_enabled = self.drag_and_drop;
+        let new_window_req_handler = Arc::new(Mutex::new(self.new_window_req_handler.clone()));
+        let navigation_handler = Arc::new(Mutex::new(self.navigation_handler.clone()));
         let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
             context: Some(&mut context),
             url: if self.html.is_empty() { Some(String::from(&self.url)) } else { None },
@@ -380,7 +393,41 @@ impl WebView {
             })
             .with_custom_protocol(
                 "res".into(), move |_webview_id, request| get_res_response(request),
-            );
+            )
+            .with_drag_drop_handler(move |_handler| {
+                drag_and_drop_enabled
+            })
+            .with_new_window_req_handler({
+                let new_window_req_handler = Arc::clone(&new_window_req_handler);
+                move |url: String| {
+                    let handler = new_window_req_handler.lock().unwrap();
+                    if handler.is_valid() {
+                        let result = handler.callv(&varray![url.to_variant()]);
+                        return result.booleanize();
+                    }
+                    false
+                }
+            })
+            .with_document_title_changed_handler({
+                let base = Arc::clone(&base);
+                move |title| {
+                    let base = Arc::clone(&base);
+                    let mut base = base.lock().unwrap();
+                    base.emit_signal("document_title_changed", &[title.to_variant()]);
+                }
+            })
+            .with_navigation_handler({
+                let navigation_handler = Arc::clone(&navigation_handler);
+                move |url: String| {
+                    let handler = navigation_handler.lock().unwrap();
+                    if handler.is_valid() {
+                        let result = handler.callv(&varray![url.to_variant()]);
+                        return result.booleanize();
+                    }
+                    false
+                }
+            })
+            ;
 
         if !self.url.is_empty() && !self.html.is_empty() {
             godot_error!("[Godot WRY] You have entered both a URL and HTML code. You may only enter one at a time.")
@@ -614,6 +661,16 @@ impl WebView {
         if let Some(webview) = &self.webview {
             let _ = webview.zoom(scale_factor);
         }
+    }
+
+    #[func]
+    fn set_navigation_handler(&mut self, callable: Callable) {
+        self.navigation_handler = callable;
+    }
+
+    #[func]
+    fn set_new_window_req_handler(&mut self, callable: Callable) {
+        self.new_window_req_handler = callable;
     }
 }
 
