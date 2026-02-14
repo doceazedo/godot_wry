@@ -41,6 +41,7 @@ unsafe impl ExtensionLibrary for GodotWRY {}
 struct WebView {
     base: Base<Control>,
     webview: Option<wry::WebView>,
+    window_id: i32,
     previous_screen_position: Vector2,
     previous_viewport_size: Vector2i,
     previous_window_position: Vector2i,
@@ -82,6 +83,7 @@ impl IControl for WebView {
         Self {
             base,
             webview: None,
+            window_id: 0,
             previous_screen_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
             previous_window_position: Vector2i::default(),
@@ -126,15 +128,20 @@ impl WebView {
     #[func]
     fn update_webview(&mut self) {
         if let Some(_) = &self.webview {
-            let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
-            let window_position = DisplayServer::singleton().window_get_position();
+            let viewport_size = self.base().get_window()
+                .map(|w| w.get_size())
+                .unwrap_or_else(|| {
+                    self.base().get_tree().expect("Could not get tree")
+                        .get_root().expect("Could not get viewport").get_size()
+                });
+            let window_position = DisplayServer::singleton().window_get_position_ex().window_id(self.window_id).done();
 
-            let needs_resize = self.base().get_screen_position() != self.previous_screen_position
+            let needs_resize = self.base().get_global_position() != self.previous_screen_position
                 || viewport_size != self.previous_viewport_size
                 || window_position != self.previous_window_position;
 
             if needs_resize {
-                self.previous_screen_position = self.base().get_screen_position();
+                self.previous_screen_position = self.base().get_global_position();
                 self.previous_viewport_size = viewport_size;
                 self.previous_window_position = window_position;
                 self.resize();
@@ -159,7 +166,13 @@ impl WebView {
         #[cfg(target_os = "linux")]
         gtk::init().expect("Failed to initialize GTK");
 
-        let window = GodotWindow;
+        // Determine which OS window this Control belongs to
+        let window_id = self.base().get_window()
+            .map(|w| w.get_window_id())
+            .unwrap_or(0);
+        self.window_id = window_id;
+
+        let window = GodotWindow::new(window_id);
 
         // remove WS_CLIPCHILDREN from the window style
         // otherwise, transparent on windows won't work
@@ -348,7 +361,6 @@ impl WebView {
                                     
                                     event.set_keycode(godot_key);
                                     event.set_pressed(event_type == "_key_down");
-
                                     event.set_shift_pressed(json_value.get("shift").and_then(|v| v.as_bool()).unwrap_or(false));
                                     event.set_ctrl_pressed(json_value.get("ctrl").and_then(|v| v.as_bool()).unwrap_or(false));
                                     event.set_alt_pressed(json_value.get("alt").and_then(|v| v.as_bool()).unwrap_or(false));
@@ -491,13 +503,20 @@ impl WebView {
     fn resize(&self) {
         if let Some(webview) = &self.webview {
             let rect = if self.full_window_size {
-                let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
+                // Get the size of the window this Control belongs to
+                let window_size = self.base().get_window()
+                    .map(|w| w.get_size())
+                    .unwrap_or_else(|| {
+                        self.base().get_tree().expect("Could not get tree")
+                            .get_root().expect("Could not get viewport").get_size()
+                    });
                 Rect {
                     position: PhysicalPosition::new(0, 0).into(),
-                    size: PhysicalSize::new(viewport_size.x, viewport_size.y).into(),
+                    size: PhysicalSize::new(window_size.x, window_size.y).into(),
                 }
             } else {
-                let pos = self.base().get_screen_position();
+                // Use position relative to the viewport (= relative to the window's client area)
+                let pos = self.base().get_global_position();
                 let size = self.base().get_size();
                 Rect {
                     position: PhysicalPosition::new(pos.x, pos.y).into(),
