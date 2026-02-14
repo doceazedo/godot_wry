@@ -22,14 +22,21 @@ use {
     raw_window_handle::{XlibWindowHandle},
 };
 
+pub struct GodotWindow {
+    pub window_id: i32,
+}
 
-pub struct GodotWindow;
+impl GodotWindow {
+    pub fn new(window_id: i32) -> Self {
+        Self { window_id }
+    }
+}
 
 impl HasWindowHandle for GodotWindow {
     #[cfg(target_os = "windows")]
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
         let display_server = DisplayServer::singleton();
-        let window_handle = display_server.window_get_native_handle(HandleType::WINDOW_HANDLE);
+        let window_handle = display_server.window_get_native_handle_ex(HandleType::WINDOW_HANDLE).window_id(self.window_id).done();
         let non_zero_window_handle = NonZero::new(window_handle).expect("WindowHandle creation failed");
         unsafe {
             Ok(WindowHandle::borrow_raw(
@@ -43,7 +50,7 @@ impl HasWindowHandle for GodotWindow {
     #[cfg(target_os = "macos")]
     fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
         let display_server = DisplayServer::singleton();
-        let window_handle = display_server.window_get_native_handle(HandleType::WINDOW_VIEW);
+        let window_handle = display_server.window_get_native_handle_ex(HandleType::WINDOW_VIEW).window_id(self.window_id).done();
         unsafe {
             Ok(WindowHandle::borrow_raw(
                 RawWindowHandle::AppKit(AppKitWindowHandle::new({
@@ -66,8 +73,8 @@ impl HasWindowHandle for GodotWindow {
         let xlib = Xlib::open().expect("Failed to open Xlib");
 
         let display_server = DisplayServer::singleton();
-        let window_xid = display_server.window_get_native_handle(HandleType::WINDOW_HANDLE);
-        let display = display_server.window_get_native_handle(HandleType::DISPLAY_HANDLE);
+        let window_xid = display_server.window_get_native_handle_ex(HandleType::WINDOW_HANDLE).window_id(self.window_id).done();
+        let display = display_server.window_get_native_handle_ex(HandleType::DISPLAY_HANDLE).window_id(self.window_id).done();
 
         unsafe {
             let attributes: XWindowAttributes = std::mem::zeroed();
