@@ -43,6 +43,7 @@ struct WebView {
     webview: Option<wry::WebView>,
     previous_screen_position: Vector2,
     previous_viewport_size: Vector2i,
+    previous_window_position: Vector2i,
     #[export]
     full_window_size: bool,
     #[export]
@@ -83,6 +84,7 @@ impl IControl for WebView {
             webview: None,
             previous_screen_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
+            previous_window_position: Vector2i::default(),
             full_window_size: true,
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
@@ -125,10 +127,16 @@ impl WebView {
     fn update_webview(&mut self) {
         if let Some(_) = &self.webview {
             let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
+            let window_position = DisplayServer::singleton().window_get_position();
 
-            if self.base().get_screen_position() != self.previous_screen_position || viewport_size != self.previous_viewport_size {
+            let needs_resize = self.base().get_screen_position() != self.previous_screen_position
+                || viewport_size != self.previous_viewport_size
+                || window_position != self.previous_window_position;
+
+            if needs_resize {
                 self.previous_screen_position = self.base().get_screen_position();
                 self.previous_viewport_size = viewport_size;
+                self.previous_window_position = window_position;
                 self.resize();
             }
 
@@ -147,6 +155,9 @@ impl WebView {
             godot_warn!("Godot WRY: Headless mode detected. webview will not be created.");
             return;
         }
+
+        #[cfg(target_os = "linux")]
+        gtk::init().expect("Failed to initialize GTK");
 
         let window = GodotWindow;
 
@@ -298,18 +309,45 @@ impl WebView {
                                     Input::singleton().parse_input_event(&event);
                                     return;
                                 },
-                                
+
+                                "_mouse_wheel" => {
+                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                    let delta_x = json_value.get("deltaX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                    let delta_y = json_value.get("deltaY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+
+                                    let position = Vector2::new(x, y);
+                                    let button_mask = *CURRENT_BUTTON_MASK.lock().unwrap();
+                                    let modifiers = (
+                                        json_value.get("shift").and_then(|v| v.as_bool()).unwrap_or(false),
+                                        json_value.get("ctrl").and_then(|v| v.as_bool()).unwrap_or(false),
+                                        json_value.get("alt").and_then(|v| v.as_bool()).unwrap_or(false),
+                                        json_value.get("meta").and_then(|v| v.as_bool()).unwrap_or(false),
+                                    );
+
+                                    if delta_y != 0.0 {
+                                        let button = if delta_y < 0.0 { MouseButton::WHEEL_UP } else { MouseButton::WHEEL_DOWN };
+                                        let factor = (delta_y.abs() / 100.0).max(1.0);
+                                        send_wheel_event(button, position, factor, button_mask, modifiers);
+                                    }
+
+                                    if delta_x != 0.0 {
+                                        let button = if delta_x < 0.0 { MouseButton::WHEEL_LEFT } else { MouseButton::WHEEL_RIGHT };
+                                        let factor = (delta_x.abs() / 100.0).max(1.0);
+                                        send_wheel_event(button, position, factor, button_mask, modifiers);
+                                    }
+
+                                    return;
+                                },
+
                                 "_key_down" | "_key_up" => {
                                     let key_str = json_value.get("key").and_then(|v| v.as_str()).unwrap_or("");
-                                    // let key_code = json_value.get("keyCode").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                                    
                                     let mut event = InputEventKey::new_gd();
                                     
                                     let godot_key = GODOT_KEYS.get(key_str).copied().unwrap_or(Key::NONE);
                                     
                                     event.set_keycode(godot_key);
                                     event.set_pressed(event_type == "_key_down");
-
                                     event.set_shift_pressed(json_value.get("shift").and_then(|v| v.as_bool()).unwrap_or(false));
                                     event.set_ctrl_pressed(json_value.get("ctrl").and_then(|v| v.as_bool()).unwrap_or(false));
                                     event.set_alt_pressed(json_value.get("alt").and_then(|v| v.as_bool()).unwrap_or(false));
@@ -389,20 +427,16 @@ impl WebView {
                 });
                 document.addEventListener('wheel', (e) => {
                     if (!document.hasFocus()) return;
-                    const button = e.deltaY < 0 ? 3 : 4; // 3 = WHEEL_UP, 4 = WHEEL_DOWN
-                    
                     window.ipc.postMessage(JSON.stringify({
-                        type: '_mouse_down',
+                        type: '_mouse_wheel',
                         x: e.clientX * window.devicePixelRatio,
                         y: e.clientY * window.devicePixelRatio,
-                        button: button
-                    }));
-                    
-                    window.ipc.postMessage(JSON.stringify({
-                        type: '_mouse_up',
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
-                        button: button
+                        deltaX: e.deltaX,
+                        deltaY: e.deltaY,
+                        shift: e.shiftKey,
+                        ctrl: e.ctrlKey,
+                        alt: e.altKey,
+                        meta: e.metaKey
                     }));
                 });
                 document.addEventListener('keydown', (e) => {
@@ -579,6 +613,30 @@ impl WebView {
         if let Some(webview) = &self.webview {
             let _ = webview.zoom(scale_factor);
         }
+    }
+}
+
+fn send_wheel_event(
+    button: MouseButton,
+    position: Vector2,
+    factor: f32,
+    button_mask: MouseButtonMask,
+    modifiers: (bool, bool, bool, bool),
+) {
+    let (shift, ctrl, alt, meta) = modifiers;
+    for pressed in [true, false] {
+        let mut event = InputEventMouseButton::new_gd();
+        event.set_button_index(button);
+        event.set_position(position);
+        event.set_global_position(position);
+        event.set_pressed(pressed);
+        event.set_factor(factor);
+        event.set_button_mask(button_mask);
+        event.set_shift_pressed(shift);
+        event.set_ctrl_pressed(ctrl);
+        event.set_alt_pressed(alt);
+        event.set_meta_pressed(meta);
+        Input::singleton().parse_input_event(&event);
     }
 }
 
