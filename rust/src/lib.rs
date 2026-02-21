@@ -6,7 +6,7 @@ mod protocols;
 use godot::global::MouseButtonMask;
 use godot::init::*;
 use godot::prelude::*;
-use godot::classes::{Control, DisplayServer, IControl, Input, InputEventMouseButton, InputEventMouseMotion, InputEventKey, ProjectSettings};
+use godot::classes::{Control, DisplayServer, IControl, Input, InputEvent, InputEventMouseButton, InputEventMouseMotion, InputEventKey, ProjectSettings};
 use godot::global::{Key, MouseButton};
 use lazy_static::lazy_static;
 use serde_json;
@@ -113,6 +113,28 @@ impl IControl for WebView {
 
     fn process(&mut self, _delta: f64) {
         self.update_webview();
+    }
+
+    fn input(&mut self, event: Gd<InputEvent>) {
+        if self.webview.is_none() || self.full_window_size {
+            return;
+        }
+
+        // When a mouse button is pressed outside the webview rect, release
+        // native focus from WebView2 back to the parent window so that
+        // other Godot controls can receive keyboard input.
+        if let Ok(mouse_event) = event.try_cast::<InputEventMouseButton>() {
+            if mouse_event.is_pressed() {
+                let mouse_pos = self.base().get_global_mouse_position();
+                let rect = self.base().get_global_rect();
+
+                if !rect.contains_point(mouse_pos) {
+                    if let Some(webview) = &self.webview {
+                        let _ = webview.focus_parent();
+                    }
+                }
+            }
+        }
     }
 }
 
