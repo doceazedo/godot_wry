@@ -44,7 +44,7 @@ struct WebView {
     base: Base<Control>,
     webview: Option<wry::WebView>,
     window_id: i32,
-    previous_screen_position: Vector2,
+    previous_global_position: Vector2,
     previous_viewport_size: Vector2i,
     previous_window_position: Vector2i,
     #[export]
@@ -86,7 +86,7 @@ impl IControl for WebView {
             base,
             webview: None,
             window_id: 0,
-            previous_screen_position: Vector2::default(),
+            previous_global_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
             previous_window_position: Vector2i::default(),
             full_window_size: true,
@@ -160,12 +160,12 @@ impl WebView {
                 });
             let window_position = DisplayServer::singleton().window_get_position_ex().window_id(self.window_id).done();
 
-            let needs_resize = self.base().get_global_position() != self.previous_screen_position
+            let needs_resize = self.base().get_global_position() != self.previous_global_position
                 || viewport_size != self.previous_viewport_size
                 || window_position != self.previous_window_position;
 
             if needs_resize {
-                self.previous_screen_position = self.base().get_global_position();
+                self.previous_global_position = self.base().get_global_position();
                 self.previous_viewport_size = viewport_size;
                 self.previous_window_position = window_position;
                 self.resize();
