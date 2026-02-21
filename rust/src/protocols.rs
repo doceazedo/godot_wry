@@ -17,15 +17,15 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
     );
     let mut full_path = root.join(path);
 
-    if full_path.ends_with("/") || full_path.is_dir() || full_path.extension().is_none() {
+    let mut full_path_str = GString::from(full_path.to_str().unwrap_or_default());
+    if !FileAccess::file_exists(&full_path_str) {
         let index_path = full_path.join("index.html");
-        
-        if FileAccess::file_exists(&GString::from(index_path.to_str().unwrap_or_default())) {
+        let index_path_str = GString::from(index_path.to_str().unwrap_or_default());
+        if FileAccess::file_exists(&index_path_str) {
             full_path = index_path;
+            full_path_str = index_path_str;
         }
     }
-
-    let full_path_str = GString::from(full_path.to_str().unwrap_or_default());
 
     if !FileAccess::file_exists(&full_path_str) {
         return http::Response::builder()
