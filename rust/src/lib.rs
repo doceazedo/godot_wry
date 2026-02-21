@@ -1,3 +1,5 @@
+#[macro_use]
+mod macros;
 mod godot_window;
 mod protocols;
 
