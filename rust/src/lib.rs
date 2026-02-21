@@ -418,21 +418,11 @@ impl WebView {
                 "res".into(), move |_webview_id, request| get_res_response(request),
             );
 
-        if !self.url.is_empty() && !self.html.is_empty() {
-            godot_error!("[Godot WRY] You have entered both a URL and HTML code. You may only enter one at a time.")
-        }
-
-        let webview = webview_builder.build_as_child(&window).unwrap();
-        self.webview.replace(webview);
-
-        let mut viewport = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport");
-        viewport.connect("size_changed", &Callable::from_object_method(&*self.base(), "resize"));
-
-        self.base().clone().connect("resized", &Callable::from_object_method(&*self.base(), "resize"));
-        self.base().clone().connect("visibility_changed", &Callable::from_object_method(&*self.base(), "update_visibility"));
-
-        if self.forward_input_events {
-            let forward_script = r#"
+        // Register the input-forwarding script as an initialization script so
+        // it is automatically re-injected on every page navigation, not just
+        // the first load.
+        let webview_builder = if self.forward_input_events {
+            webview_builder.with_initialization_script(r#"
                 document.addEventListener('mousemove', (e) => {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
@@ -504,12 +494,23 @@ impl WebView {
                         meta: isModifier ? false : e.metaKey
                     }));
                 });
-            "#;
-            
-            if let Some(ref webview) = self.webview {
-                let _ = webview.evaluate_script(forward_script);
-            }
+            "#)
+        } else {
+            webview_builder
+        };
+
+        if !self.url.is_empty() && !self.html.is_empty() {
+            godot_error!("[Godot WRY] You have entered both a URL and HTML code. You may only enter one at a time.")
         }
+
+        let webview = webview_builder.build_as_child(&window).unwrap();
+        self.webview.replace(webview);
+
+        let mut viewport = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport");
+        viewport.connect("size_changed", &Callable::from_object_method(&*self.base(), "resize"));
+
+        self.base().clone().connect("resized", &Callable::from_object_method(&*self.base(), "resize"));
+        self.base().clone().connect("visibility_changed", &Callable::from_object_method(&*self.base(), "update_visibility"));
 
         self.resize()
     }
