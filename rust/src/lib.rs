@@ -632,10 +632,17 @@ impl WebView {
             match webview.set_visible(visibility) {
                 Ok(_) => self.resize(),
                 Err(e) => {
-                    // Gracefully handle cases where the OS window has been
-                    // destroyed (e.g. parent Window.hide()) — the webview will
-                    // be re-shown when the window reappears.
-                    godot_warn!("[Godot WRY] Could not set webview visibility: {e}");
+                    // This typically happens when the parent OS window has been
+                    // destroyed (e.g. Window.hide()). To avoid this, reparent
+                    // the WebView node to the scene root BEFORE calling
+                    // Window.hide(), then reparent it back AFTER Window.show().
+                    // The WebView will detect the window change in enter_tree()
+                    // and automatically move its native handle to the new
+                    // parent window.
+                    godot_warn!("[Godot WRY] Could not set webview visibility: {e}. \
+                        If you are using Window.hide()/show(), reparent the WebView \
+                        node out of the Window before hide() and back after show() \
+                        so the native handle can survive the window destruction.");
                 }
             }
         }
