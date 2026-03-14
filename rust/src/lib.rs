@@ -48,6 +48,7 @@ struct WebView {
     previous_global_position: Vector2,
     previous_viewport_size: Vector2i,
     previous_window_position: Vector2i,
+    previous_content_scale_factor: f32,
     #[export]
     full_window_size: bool,
     #[export]
@@ -90,6 +91,7 @@ impl IControl for WebView {
             previous_global_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
             previous_window_position: Vector2i::default(),
+            previous_content_scale_factor: 1.0,
             full_window_size: true,
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
@@ -179,15 +181,20 @@ impl WebView {
                     .get_root().expect("Could not get viewport").get_size()
             });
         let window_position = DisplayServer::singleton().window_get_position_ex().window_id(self.window_id).done();
+        let content_scale_factor = self.base().get_window()
+            .map(|w| w.get_content_scale_factor())
+            .unwrap_or(1.0);
 
         let needs_resize = self.base().get_global_position() != self.previous_global_position
             || viewport_size != self.previous_viewport_size
-            || window_position != self.previous_window_position;
+            || window_position != self.previous_window_position
+            || content_scale_factor != self.previous_content_scale_factor;
 
         if needs_resize {
             self.previous_global_position = self.base().get_global_position();
             self.previous_viewport_size = viewport_size;
             self.previous_window_position = window_position;
+            self.previous_content_scale_factor = content_scale_factor;
             self.resize();
         }
 
@@ -607,15 +614,36 @@ impl WebView {
                 }
             } else {
                 // Use position relative to the viewport (= relative to the window's client area)
+                // Scale by content_scale_factor to convert from viewport coords to physical window coords
                 let pos = self.base().get_global_position();
                 let size = self.base().get_size();
+                let (scale_x, scale_y) = self.get_content_scale();
                 Rect {
-                    position: PhysicalPosition::new(pos.x, pos.y).into(),
-                    size: PhysicalSize::new(size.x, size.y).into(),
+                    position: PhysicalPosition::new(pos.x * scale_x, pos.y * scale_y).into(),
+                    size: PhysicalSize::new(size.x * scale_x, size.y * scale_y).into(),
                 }
             };
             let _ = webview.set_bounds(rect);
         }
+    }
+
+    /// Compute the effective scale from viewport (logical) coordinates to
+    /// the native window's physical coordinates.  This accounts for both
+    /// `Window.content_scale_factor` and `content_scale_size` / `content_scale_mode`.
+    fn get_content_scale(&self) -> (f32, f32) {
+        if let Some(window) = self.base().get_window() {
+            let window_size = window.get_size();
+            if let Some(viewport) = self.base().get_viewport() {
+                let vp_size = viewport.get_visible_rect().size;
+                if vp_size.x > 0.0 && vp_size.y > 0.0 {
+                    return (
+                        window_size.x as f32 / vp_size.x,
+                        window_size.y as f32 / vp_size.y,
+                    );
+                }
+            }
+        }
+        (1.0, 1.0)
     }
 
     #[func]
