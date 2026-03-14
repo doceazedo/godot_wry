@@ -25,6 +25,7 @@ use {
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     windows::Win32::Foundation::HWND,
     windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, GWL_STYLE},
+    wry::WebViewExtWindows,
 };
 
 // Required for Windows to link against the wevtapi library for webview2,
@@ -111,6 +112,22 @@ impl IControl for WebView {
         self.create_webview();
     }
 
+    fn enter_tree(&mut self) {
+        // When the Control is reparented via GDScript (e.g. moved to a
+        // different Window, or temporarily reparented to the scene root
+        // before a Window.hide() call), proactively move the native
+        // webview to the new parent OS window so it survives the old
+        // window's destruction.
+        if self.webview.is_some() {
+            if let Some(gd_window) = self.base().get_window() {
+                let current_window_id = gd_window.get_window_id();
+                if current_window_id != self.window_id {
+                    self.reparent_webview(current_window_id);
+                }
+            }
+        }
+    }
+
     fn process(&mut self, _delta: f64) {
         self.update_webview();
     }
@@ -151,35 +168,38 @@ impl WebView {
 
     #[func]
     fn update_webview(&mut self) {
-        if let Some(_) = &self.webview {
-            let viewport_size = self.base().get_window()
-                .map(|w| w.get_size())
-                .unwrap_or_else(|| {
-                    self.base().get_tree().expect("Could not get tree")
-                        .get_root().expect("Could not get viewport").get_size()
-                });
-            let window_position = DisplayServer::singleton().window_get_position_ex().window_id(self.window_id).done();
+        if self.webview.is_none() {
+            return;
+        }
 
-            let needs_resize = self.base().get_global_position() != self.previous_global_position
-                || viewport_size != self.previous_viewport_size
-                || window_position != self.previous_window_position;
+        let viewport_size = self.base().get_window()
+            .map(|w| w.get_size())
+            .unwrap_or_else(|| {
+                self.base().get_tree().expect("Could not get tree")
+                    .get_root().expect("Could not get viewport").get_size()
+            });
+        let window_position = DisplayServer::singleton().window_get_position_ex().window_id(self.window_id).done();
 
-            if needs_resize {
-                self.previous_global_position = self.base().get_global_position();
-                self.previous_viewport_size = viewport_size;
-                self.previous_window_position = window_position;
-                self.resize();
-            }
+        let needs_resize = self.base().get_global_position() != self.previous_global_position
+            || viewport_size != self.previous_viewport_size
+            || window_position != self.previous_window_position;
 
-            #[cfg(target_os = "linux")]
-            while gtk::events_pending() {
-                gtk::main_iteration_do(false);
-            }
+        if needs_resize {
+            self.previous_global_position = self.base().get_global_position();
+            self.previous_viewport_size = viewport_size;
+            self.previous_window_position = window_position;
+            self.resize();
+        }
+
+        #[cfg(target_os = "linux")]
+        while gtk::events_pending() {
+            gtk::main_iteration_do(false);
         }
     }
 
-    #[func]
-    fn create_webview(&mut self) {
+    /// Build (or rebuild) the native webview on the current OS window.
+    /// Does NOT connect Godot signals — see `create_webview` for that.
+    fn build_webview(&mut self) {
         let display_server = DisplayServer::singleton();
         if display_server.get_name() == "headless".into()
         {
@@ -506,13 +526,59 @@ impl WebView {
         let webview = webview_builder.build_as_child(&window).unwrap();
         self.webview.replace(webview);
 
+        self.resize()
+    }
+
+    /// Called from `ready()`. Builds the webview and connects Godot signals.
+    /// Signal connections are only made once; `rebuild_webview` skips them.
+    #[func]
+    fn create_webview(&mut self) {
+        self.build_webview();
+        if self.webview.is_none() {
+            return;
+        }
+
         let mut viewport = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport");
         viewport.connect("size_changed", &Callable::from_object_method(&*self.base(), "resize"));
 
         self.base().clone().connect("resized", &Callable::from_object_method(&*self.base(), "resize"));
         self.base().clone().connect("visibility_changed", &Callable::from_object_method(&*self.base(), "update_visibility"));
+    }
 
-        self.resize()
+    /// Reparent the existing webview to a new OS window.
+    /// Called from enter_tree() when the Control is moved between windows.
+    /// Falls back to rebuilding the webview from scratch if native
+    /// reparent fails (e.g. the old native handle was already destroyed).
+    fn reparent_webview(&mut self, new_window_id: i32) {
+        if self.webview.is_none() { return; }
+
+        #[cfg(target_os = "windows")]
+        {
+            let window = GodotWindow::new(new_window_id);
+            if let Ok(wh) = window.window_handle() {
+                if let RawWindowHandle::Win32(win32) = wh.as_raw() {
+                    let hwnd = win32.hwnd.get() as isize;
+
+                    // Remove WS_CLIPCHILDREN on the new window (same as create)
+                    unsafe {
+                        let raw_hwnd = HWND(hwnd as _);
+                        let current_style = GetWindowLongPtrA(raw_hwnd, GWL_STYLE);
+                        SetWindowLongPtrA(raw_hwnd, GWL_STYLE, current_style & !0x02000000);
+                    };
+
+                    if self.webview.as_ref().unwrap().reparent(hwnd).is_ok() {
+                        self.window_id = new_window_id;
+                        self.resize();
+                        return;
+                    }
+                }
+            }
+            godot_warn!("[Godot WRY] Native reparent failed, falling back to rebuild");
+        }
+
+        // Fallback: drop the dead webview and rebuild from scratch
+        self.webview.take();
+        self.build_webview();
     }
 
     #[func]
@@ -563,8 +629,15 @@ impl WebView {
     fn update_visibility(&self) {
         if let Some(webview) = &self.webview {
             let visibility = self.base().is_visible_in_tree();
-            webview.set_visible(visibility).expect("Could not set visibility");
-            self.resize()
+            match webview.set_visible(visibility) {
+                Ok(_) => self.resize(),
+                Err(e) => {
+                    // Gracefully handle cases where the OS window has been
+                    // destroyed (e.g. parent Window.hide()) — the webview will
+                    // be re-shown when the window reappears.
+                    godot_warn!("[Godot WRY] Could not set webview visibility: {e}");
+                }
+            }
         }
     }
 
