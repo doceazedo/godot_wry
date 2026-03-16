@@ -6,7 +6,7 @@ mod protocols;
 use godot::global::MouseButtonMask;
 use godot::init::*;
 use godot::prelude::*;
-use godot::classes::{Control, DisplayServer, IControl, Input, InputEvent, InputEventMouseButton, InputEventMouseMotion, InputEventKey, ProjectSettings};
+use godot::classes::{Control, DisplayServer, IControl, InputEvent, InputEventMouseButton, InputEventMouseMotion, InputEventKey, ProjectSettings, Viewport};
 use godot::global::{Key, MouseButton};
 use lazy_static::lazy_static;
 use serde_json;
@@ -292,6 +292,23 @@ impl WebView {
                     
                     if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
                         if let Some(event_type) = json_value.get("type").and_then(|t| t.as_str()) {
+                            let global_pos = base.get_global_position();
+
+                            // Compute scale from physical window pixels to logical viewport coords.
+                            // JS sends physical-pixel coords (clientX * devicePixelRatio) relative
+                            // to the WebView's top-left. We must:
+                            //   1. Divide by scale to get logical pixels
+                            //   2. Add global_pos to shift into viewport coordinate space
+                            let (scale_x, scale_y) = {
+                                let window_size = base.get_window().map(|w| w.get_size());
+                                let vp_size = base.get_viewport().map(|v| v.get_visible_rect().size);
+                                match (window_size, vp_size) {
+                                    (Some(ws), Some(vs)) if vs.x > 0.0 && vs.y > 0.0 =>
+                                        (ws.x as f32 / vs.x, ws.y as f32 / vs.y),
+                                    _ => (1.0f32, 1.0f32),
+                                }
+                            };
+
                             match event_type {
                                 "_mouse_move" => {
                                     let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
@@ -299,23 +316,30 @@ impl WebView {
                                     
                                     let movement_x = json_value.get("movementX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let movement_y = json_value.get("movementY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+
+                                    let vp_x = x / scale_x + global_pos.x;
+                                    let vp_y = y / scale_y + global_pos.y;
                                     
                                     let mut event = InputEventMouseMotion::new_gd();
-                                    event.set_position(Vector2::new(x, y));
-                                    event.set_global_position(Vector2::new(x, y));
+                                    event.set_position(Vector2::new(vp_x, vp_y));
+                                    event.set_global_position(Vector2::new(vp_x, vp_y));
                                     
                                     let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
                                     event.set_button_mask(*button_mask);
 
-                                    event.set_relative(Vector2::new(movement_x, movement_y));
+                                    event.set_relative(Vector2::new(movement_x / scale_x, movement_y / scale_y));
                                     
-                                    Input::singleton().parse_input_event(&event);
+                                    if let Some(mut viewport) = base.get_viewport() {
+                                        viewport.push_input(&event);
+                                    }
                                     return;
                                 },
                                 
                                 "_mouse_down" | "_mouse_up" => {
                                     let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                    let vp_x = x / scale_x + global_pos.x;
+                                    let vp_y = y / scale_y + global_pos.y;
                                     let button = json_value.get("button").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                                     
                                     let godot_button = match button {
@@ -363,24 +387,28 @@ impl WebView {
                                     
                                     let mut event = InputEventMouseButton::new_gd();
                                     event.set_button_index(godot_button);
-                                    event.set_position(Vector2::new(x, y));
-                                    event.set_global_position(Vector2::new(x, y));
+                                    event.set_position(Vector2::new(vp_x, vp_y));
+                                    event.set_global_position(Vector2::new(vp_x, vp_y));
                                     event.set_pressed(pressed);
                                     
                                     let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
                                     event.set_button_mask(*button_mask);
                                     
-                                    Input::singleton().parse_input_event(&event);
+                                    if let Some(mut viewport) = base.get_viewport() {
+                                        viewport.push_input(&event);
+                                    }
                                     return;
                                 },
 
                                 "_mouse_wheel" => {
                                     let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                                    let vp_x = x / scale_x + global_pos.x;
+                                    let vp_y = y / scale_y + global_pos.y;
                                     let delta_x = json_value.get("deltaX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let delta_y = json_value.get("deltaY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
 
-                                    let position = Vector2::new(x, y);
+                                    let position = Vector2::new(vp_x, vp_y);
                                     let button_mask = *CURRENT_BUTTON_MASK.lock().unwrap();
                                     let modifiers = (
                                         json_value.get("shift").and_then(|v| v.as_bool()).unwrap_or(false),
@@ -389,16 +417,18 @@ impl WebView {
                                         json_value.get("meta").and_then(|v| v.as_bool()).unwrap_or(false),
                                     );
 
+                                    let viewport = base.get_viewport();
+
                                     if delta_y != 0.0 {
                                         let button = if delta_y < 0.0 { MouseButton::WHEEL_UP } else { MouseButton::WHEEL_DOWN };
                                         let factor = (delta_y.abs() / 100.0).max(1.0);
-                                        send_wheel_event(button, position, factor, button_mask, modifiers);
+                                        send_wheel_event(button, position, factor, button_mask, modifiers, &viewport);
                                     }
 
                                     if delta_x != 0.0 {
                                         let button = if delta_x < 0.0 { MouseButton::WHEEL_LEFT } else { MouseButton::WHEEL_RIGHT };
                                         let factor = (delta_x.abs() / 100.0).max(1.0);
-                                        send_wheel_event(button, position, factor, button_mask, modifiers);
+                                        send_wheel_event(button, position, factor, button_mask, modifiers, &viewport);
                                     }
 
                                     return;
@@ -417,7 +447,9 @@ impl WebView {
                                     event.set_alt_pressed(json_value.get("alt").and_then(|v| v.as_bool()).unwrap_or(false));
                                     event.set_meta_pressed(json_value.get("meta").and_then(|v| v.as_bool()).unwrap_or(false));
                                     
-                                    Input::singleton().parse_input_event(&event);
+                                    if let Some(mut viewport) = base.get_viewport() {
+                                        viewport.push_input(&event);
+                                    }
                                     return;
                                 },
                                 
@@ -775,6 +807,7 @@ fn send_wheel_event(
     factor: f32,
     button_mask: MouseButtonMask,
     modifiers: (bool, bool, bool, bool),
+    viewport: &Option<Gd<Viewport>>,
 ) {
     let (shift, ctrl, alt, meta) = modifiers;
     for pressed in [true, false] {
@@ -789,7 +822,9 @@ fn send_wheel_event(
         event.set_ctrl_pressed(ctrl);
         event.set_alt_pressed(alt);
         event.set_meta_pressed(meta);
-        Input::singleton().parse_input_event(&event);
+        if let Some(vp) = viewport {
+            vp.clone().push_input(&event);
+        }
     }
 }
 
