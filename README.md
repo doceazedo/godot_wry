@@ -64,11 +64,11 @@ Use [just](https://github.com/casey/just) to build the extension and move the bi
 $ just build
 ```
 
-If you need a more in-depth guide on how to compile the project, check the [Building from source](https://godot-wry.doceazedo.com/contributing/compiling.html) documentation page.
+If you need a more in-depth guide on how to compile the project, check the [Building from source](https://godot-wry.doce.sh/contributing/compiling.html) documentation page.
 
 ## 📚 Documentation
 
-Please refer to the [Docs](https://godot-wry.doceazedo.com) for API reference and in-depth guides on how to use Godot WRY.
+Please refer to the [Docs](https://godot-wry.doce.sh) for API reference and in-depth guides on how to use Godot WRY.
 
 ## 🎯 Supported platforms
 
@@ -97,13 +97,13 @@ WRY itself already has [mobile support](https://github.com/tauri-apps/wry/blob/d
 - Different browser engines across platforms
 - No automatic dependency checks
 
-You can learn more about these caveats on the [Caveats](https://godot-wry.doceazedo.com/about/caveats.html) documentation page.
+You can learn more about these caveats on the [Caveats](https://godot-wry.doce.sh/about/caveats.html) documentation page.
 
 ## 🤝 Contribute
 
-Your help is most welcome regardless of form! Check out the [How to contribute](https://godot-wry.doceazedo.com/contributing/how-to-contribute.html) page for all ways you can contribute to the project. For example, [suggest a new feature](https://github.com/doceazedo/godot_wry/issues/new?template=feature_request.md), [report a problem/bug](https://github.com/doceazedo/godot_wry/issues/new?template=bug_report.md), [submit a pull request](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests), or simply use the project and comment your experience.
+Your help is most welcome regardless of form! Check out the [How to contribute](https://godot-wry.doce.sh/contributing/how-to-contribute.html) page for all ways you can contribute to the project. For example, [suggest a new feature](https://github.com/doceazedo/godot_wry/issues/new?template=feature_request.md), [report a problem/bug](https://github.com/doceazedo/godot_wry/issues/new?template=bug_report.md), [submit a pull request](https://help.github.com/en/github/collaborating-with-issues-and-pull-requests/about-pull-requests), or simply use the project and comment your experience.
 
-See the [Roadmap](https://godot-wry.doceazedo.com/about/roadmap.html) documentation page for an idea of how the project should evolve.
+See the [Roadmap](https://godot-wry.doce.sh/about/roadmap.html) documentation page for an idea of how the project should evolve.
 
 ## 🎫 License
 
