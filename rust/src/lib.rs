@@ -292,33 +292,35 @@ impl WebView {
                     
                     if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
                         if let Some(event_type) = json_value.get("type").and_then(|t| t.as_str()) {
+                            // JS clientX/Y are CSS logical pixels, which are the same unit as
+                            // Godot's logical pixels — both abstract away OS DPI independently.
+                            // So viewport coords = global_pos (logical) + clientX/Y (logical).
+                            //
+                            // [2026-03-23 Laurence042] Bug investigation: when content_scale_factor > 1
+                            // (set via Window.content_scale_factor), clicking the top edge of a WebView
+                            // in a layout like:
+                            //   [Button] [Button] [LineEdit]
+                            //   [WebView]
+                            // causes the LineEdit to receive the click (offset by ~scale × global_pos.x),
+                            // while the Buttons above are unaffected. The original code used
+                            // `clientX * devicePixelRatio` and divided by a separately computed scale,
+                            // which was refactored away — all coordinate computation now lives here and
+                            // in resize() only. After the refactor, debug logging showed coords that
+                            // look correct (e.g. vp_y == global_pos.y when clicking the top edge), so
+                            // the hit-testing mismatch is likely a LineEdit-specific Godot issue rather
+                            // than a coordinate mapping error. Left unresolved for now.
                             let global_pos = base.get_global_position();
 
-                            // Compute scale from physical window pixels to logical viewport coords.
-                            // JS sends physical-pixel coords (clientX * devicePixelRatio) relative
-                            // to the WebView's top-left. We must:
-                            //   1. Divide by scale to get logical pixels
-                            //   2. Add global_pos to shift into viewport coordinate space
-                            let (scale_x, scale_y) = {
-                                let window_size = base.get_window().map(|w| w.get_size());
-                                let vp_size = base.get_viewport().map(|v| v.get_visible_rect().size);
-                                match (window_size, vp_size) {
-                                    (Some(ws), Some(vs)) if vs.x > 0.0 && vs.y > 0.0 =>
-                                        (ws.x as f32 / vs.x, ws.y as f32 / vs.y),
-                                    _ => (1.0f32, 1.0f32),
-                                }
-                            };
+                            // Mouse position shared by all pointer events.
+                            let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                            let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                            let vp_x = global_pos.x + x;
+                            let vp_y = global_pos.y + y;
 
                             match event_type {
                                 "_mouse_move" => {
-                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    
                                     let movement_x = json_value.get("movementX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let movement_y = json_value.get("movementY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-
-                                    let vp_x = x / scale_x + global_pos.x;
-                                    let vp_y = y / scale_y + global_pos.y;
                                     
                                     let mut event = InputEventMouseMotion::new_gd();
                                     event.set_position(Vector2::new(vp_x, vp_y));
@@ -327,7 +329,7 @@ impl WebView {
                                     let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
                                     event.set_button_mask(*button_mask);
 
-                                    event.set_relative(Vector2::new(movement_x / scale_x, movement_y / scale_y));
+                                    event.set_relative(Vector2::new(movement_x, movement_y));
                                     
                                     if let Some(mut viewport) = base.get_viewport() {
                                         viewport.push_input(&event);
@@ -336,10 +338,6 @@ impl WebView {
                                 },
                                 
                                 "_mouse_down" | "_mouse_up" => {
-                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let vp_x = x / scale_x + global_pos.x;
-                                    let vp_y = y / scale_y + global_pos.y;
                                     let button = json_value.get("button").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                                     
                                     let godot_button = match button {
@@ -401,10 +399,6 @@ impl WebView {
                                 },
 
                                 "_mouse_wheel" => {
-                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let vp_x = x / scale_x + global_pos.x;
-                                    let vp_y = y / scale_y + global_pos.y;
                                     let delta_x = json_value.get("deltaX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let delta_y = json_value.get("deltaY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
 
@@ -486,10 +480,10 @@ impl WebView {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_move',
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
-                        movementX: e.movementX * window.devicePixelRatio,
-                        movementY: e.movementY * window.devicePixelRatio,
+                        x: e.clientX,
+                        y: e.clientY,
+                        movementX: e.movementX,
+                        movementY: e.movementY,
                         button: e.button
                     }));
                 });
@@ -497,17 +491,17 @@ impl WebView {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_down',
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
+                        x: e.clientX,
+                        y: e.clientY,
                         button: e.button
                     }));
                 });
                 document.addEventListener('mouseup', (e) => {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
-                        type: '_mouse_up', 
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
+                        type: '_mouse_up',
+                        x: e.clientX,
+                        y: e.clientY,
                         button: e.button
                     }));
                 });
@@ -515,8 +509,8 @@ impl WebView {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_wheel',
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
+                        x: e.clientX,
+                        y: e.clientY,
                         deltaX: e.deltaX,
                         deltaY: e.deltaY,
                         shift: e.shiftKey,
@@ -645,13 +639,14 @@ impl WebView {
                     size: PhysicalSize::new(window_size.x, window_size.y).into(),
                 }
             } else {
-                // Use position relative to the viewport (= relative to the window's client area)
-                // Scale by content_scale_factor to convert from viewport coords to physical window coords
+                // Convert logical position/size to physical pixels for the OS bounds call.
                 let pos = self.base().get_global_position();
                 let size = self.base().get_size();
                 let (scale_x, scale_y) = self.get_content_scale();
+                let phys_x = (pos.x * scale_x).round();
+                let phys_y = (pos.y * scale_y).round();
                 Rect {
-                    position: PhysicalPosition::new(pos.x * scale_x, pos.y * scale_y).into(),
+                    position: PhysicalPosition::new(phys_x, phys_y).into(),
                     size: PhysicalSize::new(size.x * scale_x, size.y * scale_y).into(),
                 }
             };
