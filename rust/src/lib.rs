@@ -110,10 +110,21 @@ impl IControl for WebView {
     fn process(&mut self, _delta: f64) {
         self.update_webview();
     }
+
+    fn exit_tree(&mut self) {
+        self.restore_parent_focus();
+        self.webview.take();
+    }
 }
 
 #[godot_api]
 impl WebView {
+    fn restore_parent_focus(&self) {
+        if let Some(webview) = &self.webview {
+            let _ = webview.focus_parent();
+        }
+    }
+
     #[signal]
     fn ipc_message(message: GString);
 
@@ -519,6 +530,9 @@ impl WebView {
     fn update_visibility(&self) {
         if let Some(webview) = &self.webview {
             let visibility = self.base().is_visible_in_tree();
+            if !visibility {
+                self.restore_parent_focus();
+            }
             webview.set_visible(visibility).expect("Could not set visibility");
             self.resize()
         }
@@ -527,6 +541,9 @@ impl WebView {
     #[func]
     fn set_visible(&self, visibility: bool) {
         if let Some(webview) = &self.webview {
+            if !visibility {
+                self.restore_parent_focus();
+            }
             let _ = webview.set_visible(visibility);
         }
     }
@@ -590,9 +607,7 @@ impl WebView {
 
     #[func]
     fn focus_parent(&self) {
-        if let Some(webview) = &self.webview {
-            let _ = webview.focus_parent();
-        }
+        self.restore_parent_focus();
     }
 
     #[func]
