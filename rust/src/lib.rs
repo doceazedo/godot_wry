@@ -59,7 +59,7 @@ struct WebView {
     #[export]
     devtools: bool,
     #[export]
-    headers: Dictionary,
+    headers: VarDictionary,
     #[export]
     user_agent: GString,
     #[export]
@@ -92,7 +92,7 @@ impl IControl for WebView {
             transparent: false,
             background_color: Color::from_rgb(1.0, 1.0, 1.0),
             devtools: true,
-            headers: Dictionary::new(),
+            headers: VarDictionary::new(),
             user_agent: "".into(),
             zoom_hotkeys: false,
             clipboard: true,
@@ -126,7 +126,7 @@ impl WebView {
     #[func]
     fn update_webview(&mut self) {
         if let Some(_) = &self.webview {
-            let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
+            let viewport_size = self.base().get_tree().get_root().expect("Could not get viewport").get_size();
             let window_position = DisplayServer::singleton().window_get_position();
 
             let needs_resize = self.base().get_screen_position() != self.previous_screen_position
@@ -150,7 +150,7 @@ impl WebView {
     #[func]
     fn create_webview(&mut self) {
         let display_server = DisplayServer::singleton();
-        if display_server.get_name() == "headless".into()
+        if display_server.get_name() == "headless"
         {
             godot_warn!("Godot WRY: Headless mode detected. webview will not be created.");
             return;
@@ -204,7 +204,7 @@ impl WebView {
             None
         };
         let mut context = WebContext::new(resolved_data_directory);
-        let webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
+        let mut webview_builder = WebViewBuilder::with_attributes(WebViewAttributes {
             context: Some(&mut context),
             url: if self.html.is_empty() { Some(String::from(&self.url)) } else { None },
             html: if self.url.is_empty() { Some(String::from(&self.html)) } else { None },
@@ -386,15 +386,6 @@ impl WebView {
             godot_error!("[Godot WRY] You have entered both a URL and HTML code. You may only enter one at a time.")
         }
 
-        let webview = webview_builder.build_as_child(&window).unwrap();
-        self.webview.replace(webview);
-
-        let mut viewport = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport");
-        viewport.connect("size_changed", &Callable::from_object_method(&*self.base(), "resize"));
-
-        self.base().clone().connect("resized", &Callable::from_object_method(&*self.base(), "resize"));
-        self.base().clone().connect("visibility_changed", &Callable::from_object_method(&*self.base(), "update_visibility"));
-
         if self.forward_input_events {
             let forward_script = r#"
                 document.addEventListener('mousemove', (e) => {
@@ -420,7 +411,7 @@ impl WebView {
                 document.addEventListener('mouseup', (e) => {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
-                        type: '_mouse_up', 
+                        type: '_mouse_up',
                         x: e.clientX * window.devicePixelRatio,
                         y: e.clientY * window.devicePixelRatio,
                         button: e.button
@@ -469,11 +460,17 @@ impl WebView {
                     }));
                 });
             "#;
-            
-            if let Some(ref webview) = self.webview {
-                let _ = webview.evaluate_script(forward_script);
-            }
+            webview_builder = webview_builder.with_initialization_script(forward_script);
         }
+
+        let webview = webview_builder.build_as_child(&window).unwrap();
+        self.webview.replace(webview);
+
+        let mut viewport = self.base().get_tree().get_root().expect("Could not get viewport");
+        viewport.connect("size_changed", &Callable::from_object_method(&*self.base(), "resize"));
+
+        self.base().clone().connect("resized", &Callable::from_object_method(&*self.base(), "resize"));
+        self.base().clone().connect("visibility_changed", &Callable::from_object_method(&*self.base(), "update_visibility"));
 
         self.resize()
     }
@@ -491,7 +488,7 @@ impl WebView {
     fn resize(&self) {
         if let Some(webview) = &self.webview {
             let rect = if self.full_window_size {
-                let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
+                let viewport_size = self.base().get_tree().get_root().expect("Could not get viewport").get_size();
                 Rect {
                     position: PhysicalPosition::new(0, 0).into(),
                     size: PhysicalSize::new(viewport_size.x, viewport_size.y).into(),

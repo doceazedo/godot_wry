@@ -15,8 +15,12 @@ dest_files=["res://.godot/imported/character.glb-be11b3e34d69ccea7a5576e55e558e3
 
 nodes/root_type=""
 nodes/root_name=""
+nodes/root_script=null
 nodes/apply_root_scale=true
 nodes/root_scale=1.0
+nodes/import_as_skeleton_bones=false
+nodes/use_name_suffixes=true
+nodes/use_node_type_suffixes=true
 meshes/ensure_tangents=true
 meshes/generate_lods=true
 meshes/create_shadow_meshes=true
@@ -28,120 +32,152 @@ animation/import=true
 animation/fps=30
 animation/trimming=false
 animation/remove_immutable_tracks=true
+animation/import_rest_as_RESET=false
 import_script/path=""
+materials/extract=0
+materials/extract_format=0
+materials/extract_path=""
 _subresources={
 "materials": {
 "Glasses": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/Glasses.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/Glasses.tres",
+"use_external/path": "uid://cplxsnxuc714o"
 },
 "Hair": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/Hair.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/Hair.tres",
+"use_external/path": "uid://x2u2kvo3nosf"
 },
 "MaCatEarsInner3": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MaCatEarsInner3.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MaCatEarsInner3.tres",
+"use_external/path": "uid://bfswqwwqjtsma"
 },
 "MatBody": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatBody.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatBody.tres",
+"use_external/path": "uid://7xbuixdcv02"
 },
 "MatBoots": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatBoots.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatBoots.tres",
+"use_external/path": "uid://nunkffkepoe0"
 },
 "MatBoots2": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatBoots2.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatBoots2.tres",
+"use_external/path": "uid://bxoshitkk8u3y"
 },
 "MatCatEars": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatCatEars.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatCatEars.tres",
+"use_external/path": "uid://dxpi8mrqyuub1"
 },
 "MatCatEarsInner": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatCatEarsInner.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatCatEarsInner.tres",
+"use_external/path": "uid://bp0cmciu0n7bj"
 },
 "MatCatEarsInner2": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatCatEarsInner2.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatCatEarsInner2.tres",
+"use_external/path": "uid://cxh082gwncdfp"
 },
 "MatDress": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatDress.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatDress.tres",
+"use_external/path": "uid://dmqp8vpyr2l4g"
 },
 "MatEye": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatEye.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatEye.tres",
+"use_external/path": "uid://rffvexa6hnsl"
 },
 "MatEyeBlack": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatEyeBlack.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatEyeBlack.tres",
+"use_external/path": "uid://dm6lxns21d7ys"
 },
 "MatFace": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatFace.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatFace.tres",
+"use_external/path": "uid://bqceuksu3vvks"
 },
 "MatHat": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatHat.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatHat.tres",
+"use_external/path": "uid://dv2n32dg3k6ro"
 },
 "MatHatCap": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatHatCap.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatHatCap.tres",
+"use_external/path": "uid://dddt4km47cpoy"
 },
 "MatHatLogo": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatHatLogo.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatHatLogo.tres",
+"use_external/path": "uid://die8gebvvd8a1"
 },
 "MatJeans": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatJeans.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatJeans.tres",
+"use_external/path": "uid://cohqcp8nuy0j2"
 },
 "MatJeans2": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatJeans2.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatJeans2.tres",
+"use_external/path": "uid://b37ngi4yl3xn7"
 },
 "MatNecklace": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatNecklace.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatNecklace.tres",
+"use_external/path": "uid://c3c1l7ve3l42v"
 },
 "MatNose": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatNose.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatNose.tres",
+"use_external/path": "uid://ujhvr562ptav"
 },
 "MatShirt01": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShirt01.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShirt01.tres",
+"use_external/path": "uid://ch3if3j674rj1"
 },
 "MatShirt01-Color": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShirt01-Color.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShirt01-Color.tres",
+"use_external/path": "uid://bodmgbhbow8wx"
 },
 "MatShirt02": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShirt02.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShirt02.tres",
+"use_external/path": "uid://c3ab2cgt31lq8"
 },
 "MatShoelaces": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShoelaces.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShoelaces.tres",
+"use_external/path": "uid://117a651npe2s"
 },
 "MatShoes": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShoes.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShoes.tres",
+"use_external/path": "uid://pqgyjatespcf"
 },
 "MatShorts": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShorts.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatShorts.tres",
+"use_external/path": "uid://d2uas4755a35y"
 },
 "MatSkirt": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatSkirt.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatSkirt.tres",
+"use_external/path": "uid://bnv1b8ug7k0rx"
 },
 "MatUnderShirt": {
 "use_external/enabled": true,
-"use_external/path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatUnderShirt.tres"
+"use_external/fallback_path": "res://addons/godot_wry/examples/character_creator_ui_demo/assets/character/materials/MatUnderShirt.tres",
+"use_external/path": "uid://dih1q0muqalr0"
 }
 }
 }

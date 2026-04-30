@@ -1,5 +1,6 @@
 use godot::classes::display_server::HandleType;
 use godot::classes::DisplayServer;
+use godot::obj::Singleton;
 use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle, WindowHandle};
 
 #[cfg(target_os = "windows")]
@@ -12,7 +13,6 @@ use {
 use {
     raw_window_handle::{AppKitWindowHandle},
     std::ffi::c_void,
-    std::mem::transmute,
     std::ptr::NonNull,
 };
 
@@ -21,7 +21,6 @@ use {
     std::ffi::c_ulong,
     raw_window_handle::{XlibWindowHandle},
 };
-
 
 pub struct GodotWindow;
 
@@ -47,7 +46,10 @@ impl HasWindowHandle for GodotWindow {
         unsafe {
             Ok(WindowHandle::borrow_raw(
                 RawWindowHandle::AppKit(AppKitWindowHandle::new({
-                    let ptr: *mut c_void = transmute(window_handle);
+                    // `with_exposed_provenance_mut` is the explicit, lint-clean
+                    // alternative to `transmute` / `as *mut T` for int -> ptr.
+                    // Godot returned the NSView address in `window_handle`.
+                    let ptr: *mut c_void = std::ptr::with_exposed_provenance_mut(window_handle as usize);
                     NonNull::new(ptr).expect("Id<T> should never be null")
                 }))
             ))
