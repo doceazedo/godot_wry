@@ -12,6 +12,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::path::PathBuf;
 use wry::{WebViewBuilder, WebContext, Rect, WebViewAttributes, PageLoadEvent};
+#[cfg(target_os = "ios")]
+use wry::dpi::{LogicalPosition, LogicalSize};
+#[cfg(not(target_os = "ios"))]
 use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::http::Request;
 
@@ -466,6 +469,15 @@ impl WebView {
         let webview = webview_builder.build_as_child(&window).unwrap();
         self.webview.replace(webview);
 
+        // Propagate the Control's current visibility to the freshly-created
+        // webview. The visibility_changed signal connected below only fires on
+        // changes, so without this an initially-hidden Control still has a
+        // visible webview on top of the game UI.
+        let initial_visibility = self.base().is_visible_in_tree();
+        if let Some(webview_ref) = &self.webview {
+            let _ = webview_ref.set_visible(initial_visibility);
+        }
+
         let mut viewport = self.base().get_tree().get_root().expect("Could not get viewport");
         viewport.connect("size_changed", &Callable::from_object_method(&*self.base(), "resize"));
 
@@ -487,6 +499,25 @@ impl WebView {
     #[func]
     fn resize(&self) {
         if let Some(webview) = &self.webview {
+            // iOS: WKWebView always covers the full viewport, regardless of
+            // the Control's anchor rect or the `full_window_size` flag. This
+            // matches the mobile-UI-overlay convention (Web is the whole UI
+            // surface, 3D / native draws underneath through transparency).
+            // Touch pass-through where the DOM has no element is a Phase 2
+            // polish item and would require subclassing WKWebView with a
+            // hit-test that returns nil for empty regions.
+            #[cfg(target_os = "ios")]
+            let rect = {
+                let viewport_size = self.base().get_tree().get_root().expect("Could not get viewport").get_size();
+                Rect {
+                    position: LogicalPosition::new(0.0_f32, 0.0_f32).into(),
+                    size: LogicalSize::new(viewport_size.x as f32, viewport_size.y as f32).into(),
+                }
+            };
+
+            // Desktop / Linux / Windows / Android: respect the Control rect or
+            // full_window_size flag as the user configured.
+            #[cfg(not(target_os = "ios"))]
             let rect = if self.full_window_size {
                 let viewport_size = self.base().get_tree().get_root().expect("Could not get viewport").get_size();
                 Rect {
@@ -501,6 +532,7 @@ impl WebView {
                     size: PhysicalSize::new(size.x, size.y).into(),
                 }
             };
+
             let _ = webview.set_bounds(rect);
         }
     }
@@ -537,8 +569,18 @@ impl WebView {
 
     #[func]
     fn load_url(&self, url: GString) {
+        // `mut` is unused on Apple targets where the rewrite below is cfg'd out.
+        #[allow(unused_mut)]
         let mut url_str = String::from(url);
 
+        // On Windows/Linux/Android, wry's `with_custom_protocol("res", ...)` is
+        // intercepted via http URLs of the form `http://res.<path>` (a wry
+        // workaround for platforms where WKURLSchemeHandler isn't usable).
+        // On Apple platforms (macOS, iOS) the same call registers a real
+        // WKURLSchemeHandler keyed by the "res" scheme — rewriting to
+        // `http://res.<path>` there makes WKWebView do real DNS for
+        // `res.web` and hang forever. Pass `res://` through unchanged on Apple.
+        #[cfg(not(any(target_os = "macos", target_os = "ios")))]
         if let Some(stripped) = url_str.strip_prefix("res://") {
             let path = stripped.replace("\\", "/");
             url_str = format!("http://res.{}", path);

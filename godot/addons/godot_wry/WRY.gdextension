@@ -13,6 +13,9 @@ macos.release    = "bin/universal-apple-darwin/libgodot_wry.framework"
 windows.debug.x86_64   = "bin/x86_64-pc-windows-msvc/godot_wry.dll"
 windows.release.x86_64 = "bin/x86_64-pc-windows-msvc/godot_wry.dll"
 
+ios.debug   = "bin/aarch64-apple-ios/libgodot_wry.xcframework"
+ios.release = "bin/aarch64-apple-ios/libgodot_wry.xcframework"
+
 [icons]
 WebView = "icons/webview.svg"
 
@@ -30,3 +33,6 @@ windows.release.x86_64 = { "bin/x86_64-pc-windows-msvc/godot_wry.dll" : "" }
 
 linux.debug.x86_64 = { "bin/x86_64-unknown-linux-gnu/libgodot_wry.so": "" }
 linux.release.x86_64 = { "bin/x86_64-unknown-linux-gnu/libgodot_wry.so": "" }
+
+ios.debug   = { "bin/aarch64-apple-ios/libgodot_wry.xcframework" : "" }
+ios.release = { "bin/aarch64-apple-ios/libgodot_wry.xcframework" : "" }

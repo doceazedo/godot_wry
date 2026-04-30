@@ -64,6 +64,15 @@ Use [just](https://github.com/casey/just) to build the extension and move the bi
 $ just build
 ```
 
+> **macOS 15+ local dev**: after `just build` (or `just build-macos-universal`),
+> ad-hoc sign the framework or Godot will refuse to load it (SIGKILL by the
+> CODESIGNING namespace). CI release builds use a real Developer ID; local
+> builds need:
+>
+> ```sh
+> $ scripts/sign_macos_local.sh
+> ```
+
 If you need a more in-depth guide on how to compile the project, check the [Building from source](https://godot-wry.doce.sh/contributing/compiling.html) documentation page.
 
 ## 📚 Documentation
@@ -96,8 +105,25 @@ WRY itself already has [mobile support](https://github.com/tauri-apps/wry/blob/d
 - Webview always renders on top
 - Different browser engines across platforms
 - No automatic dependency checks
+- Godot 4.5+ "Embed Game on Next Play" must be **off** (see below)
 
 You can learn more about these caveats on the [Caveats](https://godot-wry.doce.sh/about/caveats.html) documentation page.
+
+### Game embedding (Godot 4.5+)
+
+Godot 4.5 introduced the **"Embed Game on Next Play"** option (Game tab toggle,
+or Editor / Project Settings → Run → Window Placement). When enabled, the
+running game is hosted inside the editor's UI through `DisplayServerEmbedded`,
+which does not own a real OS window — there is no `NSWindow` / `HWND` /
+`UIView` to attach a native subview to. `DisplayServer.window_get_native_handle`
+returns `0` and the extension panics with `Id<T> should never be null`.
+
+This affects **any** GDExtension that needs to overlay a native view (webview,
+native video, native map, etc.), not just godot_wry. The fix is to **turn
+embed mode off** so the game opens in its own native window. As an alternative
+for modal popups, attach the WebView to a separate `Window` node — that node
+opens its own real OS window even while the main game is embedded (see
+`addons/godot_wry/examples/example.tscn`).
 
 ## 🤝 Contribute
 

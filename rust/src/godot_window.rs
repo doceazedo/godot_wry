@@ -22,6 +22,14 @@ use {
     raw_window_handle::{XlibWindowHandle},
 };
 
+#[cfg(target_os = "ios")]
+use {
+    raw_window_handle::UiKitWindowHandle,
+    std::ffi::c_void,
+    std::ptr::NonNull,
+};
+
+
 pub struct GodotWindow;
 
 impl HasWindowHandle for GodotWindow {
@@ -52,6 +60,25 @@ impl HasWindowHandle for GodotWindow {
                     let ptr: *mut c_void = std::ptr::with_exposed_provenance_mut(window_handle as usize);
                     NonNull::new(ptr).expect("Id<T> should never be null")
                 }))
+            ))
+        }
+    }
+
+    // Phase 1 stub: compiles for iOS so the static lib + xcframework can link
+    // into Godot iOS export. The real implementation that pulls a UIView from
+    // the iOS GDExtension plugin shim lives in Phase 2.
+    #[cfg(target_os = "ios")]
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        let display_server = DisplayServer::singleton();
+        let window_handle = display_server.window_get_native_handle(HandleType::WINDOW_VIEW);
+        if window_handle == 0 {
+            return Err(HandleError::Unavailable);
+        }
+        unsafe {
+            let ptr: *mut c_void = std::ptr::with_exposed_provenance_mut(window_handle as usize);
+            let nn = NonNull::new(ptr).ok_or(HandleError::Unavailable)?;
+            Ok(WindowHandle::borrow_raw(
+                RawWindowHandle::UiKit(UiKitWindowHandle::new(nn))
             ))
         }
     }
