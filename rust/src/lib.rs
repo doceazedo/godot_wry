@@ -34,10 +34,63 @@ use {
 #[link(name = "wevtapi")]
 extern "system" {}
 
+// Android: stamp wry's JNI bindings into our cdylib for the package
+// `org.godotwry.plugin` (matching the GodotWry plugin AAR in
+// godot_wry/android/). The macro generates `extern "C"` symbols of the form
+// `Java_org_godotwry_plugin_RustWebView_shouldOverride`,
+// `Java_org_godotwry_plugin_Ipc_ipc`, etc — the Kotlin classes' `external fun`
+// declarations resolve against these at runtime.
+//
+// IMPORTANT: keep the args (org_godotwry, plugin) in sync with both the
+// Kotlin package declaration in android/plugin/src/main/kotlin/.../*.kt
+// and the `package` arg passed to `wry::android_setup` from
+// `Java_org_godotwry_plugin_GodotWryPlugin_initWry` below.
+//
+// The macro must be invoked inside a function body — wry's macro arm uses a
+// block expression `{{ … }}` rather than an item-list, so it's not callable
+// at module scope. The wrapping function never needs to run; the
+// `extern "C"` items the macro emits are still global linker symbols.
+#[cfg(target_os = "android")]
+#[allow(dead_code)]
+fn _android_jni_bindings() {
+    wry::android_binding!(org_godotwry, plugin);
+}
+
+// JNI entry point invoked by GodotWryPlugin.onMainCreate(activity) on the
+// Android UI thread. Bridges Godot's plugin-init lifecycle into wry's
+// android_setup(), which in turn registers the wry MainPipe looper callback
+// so subsequent `WebViewBuilder::build_as_child(&window)` calls (made by the
+// gdext WebView class above) can dispatch to wry's Android machinery.
+//
+// Must be called on a thread with an attached ALooper (the Android UI thread
+// has one by default). Calling from a worker thread will hit the
+// `ThreadLooper::for_thread()` panic.
+#[cfg(target_os = "android")]
+#[no_mangle]
+pub unsafe extern "C" fn Java_org_godotwry_plugin_GodotWryPlugin_initWry<'local>(
+    env: jni::JNIEnv<'local>,
+    _class: jni::objects::JClass<'local>,
+    activity: jni::objects::JObject<'local>,
+) {
+    let activity_global = env
+        .new_global_ref(activity)
+        .expect("[Godot WRY] failed to obtain global ref of WryActivity");
+    let looper = ndk::looper::ThreadLooper::for_thread()
+        .expect("[Godot WRY] initWry must run on a thread with an ALooper attached (Android UI thread)");
+    wry::android_setup("org/godotwry/plugin", env, &looper, activity_global);
+}
+
 struct GodotWRY;
 
 #[gdextension]
-unsafe impl ExtensionLibrary for GodotWRY {}
+unsafe impl ExtensionLibrary for GodotWRY {
+    // Diagnostic hook left in for Phase 4 verification — confirms each init
+    // stage fires on Android once `experimental-threads` is on. Once Phase 4
+    // is fully verified end-to-end, this can drop down to a default impl.
+    fn on_stage_init(stage: InitStage) {
+        godot_print!("[GodotWRY] on_stage_init({:?})", stage);
+    }
+}
 
 #[derive(GodotClass)]
 #[class(base=Control)]
@@ -366,8 +419,21 @@ impl WebView {
                         }
                     }
                     
-                    // if we get here, this is a regular IPC message
-                    base.emit_signal("ipc_message", &[body.to_variant()]);
+                    // if we get here, this is a regular IPC message.
+                    // wry's IPC callback fires on the wry MainPipe / looper
+                    // thread on Android — Godot Node API has a per-thread
+                    // safety guard that rejects `emit_signal` from any thread
+                    // other than the engine's main thread (error
+                    // `Condition "!is_accessible_from_caller_thread()" is true`
+                    // at scene/main/node.cpp:4188). `call_deferred` queues the
+                    // emit to the next idle frame, where it runs on the main
+                    // thread. Desktop uses the same path harmlessly because
+                    // there the IPC callback already runs on the main thread,
+                    // so a one-frame delay is the only behavior difference.
+                    base.call_deferred(
+                        "emit_signal",
+                        &["ipc_message".to_variant(), body.to_variant()],
+                    );
                 }
             })
             .with_on_page_load_handler({
@@ -375,10 +441,15 @@ impl WebView {
                 move | event: PageLoadEvent, url: String | {
                     let mut base = base.lock().unwrap();
 
-                    match event {
-                        PageLoadEvent::Started => base.emit_signal("page_load_started", &[url.to_variant()]),
-                        PageLoadEvent::Finished => base.emit_signal("page_load_finished", &[url.to_variant()]),
+                    let signal_name = match event {
+                        PageLoadEvent::Started => "page_load_started",
+                        PageLoadEvent::Finished => "page_load_finished",
                     };
+                    // Same cross-thread reasoning as the IPC handler above.
+                    base.call_deferred(
+                        "emit_signal",
+                        &[signal_name.to_variant(), url.to_variant()],
+                    );
                 }
             })
             .with_custom_protocol(

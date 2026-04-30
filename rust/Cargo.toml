@@ -7,7 +7,25 @@ edition = "2021"
 crate-type = ["cdylib", "staticlib"]  # cdylib for desktop GDExtension, staticlib for iOS xcframework.
 
 [dependencies]
-godot = { git = "https://github.com/godot-rust/gdext", branch = "master", features = ["api-4-6"] }
+# `experimental-threads` is the documented workaround for gdext#1423: on
+# Android, Godot reassigns the main thread between InitLevel::Core and
+# InitLevel::Servers, so gdext's `ensure_main_thread()` check panics during
+# the Servers callback. The panic is silently swallowed by gdext's
+# `swallow_panics` wrapper, so Core init looks like it succeeded but
+# Servers / Scene / Editor are never delivered to the extension. Result:
+# user classes (registered at Scene init by default) never land in
+# `class_db` and scenes referencing them fail with "Cannot get class".
+# Enabling this feature relaxes the main-thread assertion.
+#
+# Upstream fix: gdext PR #1574 ("Main thread discovery must be first")
+# merged 2026-04-30. As of the current crates.io release (gdext 0.5.2,
+# published 2026-04-28), the fix isn't in a published version yet — we
+# pin `branch = "master"` to pick it up. Once a 0.5.x release after
+# 2026-04-30 lands and we bump to it, drop `experimental-threads` from
+# the features list and verify on Android with an `on_stage_init` log
+# in the gdextension to confirm Servers/Scene callbacks still fire
+# without the workaround.
+godot = { git = "https://github.com/godot-rust/gdext", branch = "master", features = ["api-4-6", "experimental-threads"] }
 raw-window-handle = "0.6.2"
 wry = { version = "0.50.4", features = ["transparent", "devtools"] }
 http = "1.1.0"
@@ -18,3 +36,9 @@ gtk = "0.18.1"
 x11-dl = "2.21.0"
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61.1", features = ["Win32", "Win32_UI", "Win32_UI_WindowsAndMessaging", "Win32_System_Registry", "Win32_System_Diagnostics_Etw"]}
+# Android-only — `jni` for the JNI entry point that bridges
+# GodotWryPlugin.initWry() into Rust, `ndk` for ThreadLooper. Versions match
+# wry 0.50.4's transitive deps so we don't accidentally pull two majors.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk = "0.9"

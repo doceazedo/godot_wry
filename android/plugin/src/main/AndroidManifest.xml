@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <!-- Discovery hook: Godot scans plugin .aar manifests for meta-data
+             keys of the form `org.godotengine.plugin.v2.<NAME>` and loads
+             the named class as a GodotPlugin. v1 was deprecated in Godot
+             4.2 and v1 plugins do NOT trigger Godot's gdextension auto-load
+             path — only v2 plugins call `getPluginGDExtensionLibrariesPaths()`
+             on the plugin instance to discover and load bundled `.gdextension`
+             config files. Without v2 the WebView GDExtension class fails
+             silently to register on Android.
+
+             `${godotPluginName}` and `${godotPluginPackageName}` are gradle
+             manifestPlaceholders set in plugin/build.gradle from the
+             `pluginName` / `pluginPackageName` constants there. -->
+        <meta-data
+            android:name="org.godotengine.plugin.v2.${godotPluginName}"
+            android:value="${godotPluginPackageName}.${godotPluginName}Plugin" />
+    </application>
+
+</manifest>

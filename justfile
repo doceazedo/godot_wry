@@ -7,7 +7,7 @@ default: build
 
 set working-directory := 'rust'
 
-build-all: build-macos-universal build-linux build-windows build-ios
+build-all: build-macos-universal build-linux build-windows build-ios build-android build-android-aar
 
 build: 
 	@echo "Building for {{os}} ({{target}})..."
@@ -84,3 +84,56 @@ build-ios:
 		-output ./target/aarch64-apple-ios/release/libgodot_wry.xcframework
 	mkdir -p ../godot/addons/godot_wry/bin/aarch64-apple-ios
 	cp -R ./target/aarch64-apple-ios/release/libgodot_wry.xcframework ../godot/addons/godot_wry/bin/aarch64-apple-ios/
+
+# Android: cross-compile from any host (macOS/Linux) via cargo-ndk. Requires
+# `cargo install cargo-ndk` and an NDK 25.x install with ANDROID_NDK_HOME set.
+# Produces one libgodot_wry.so per ABI laid out under
+# ../godot/addons/godot_wry/bin/android/<abi>/ — Godot's GDExtension loader
+# expects exactly that directory naming (arm64-v8a, armeabi-v7a, x86_64, x86).
+build-android:
+	@echo "Building Android .so for arm64-v8a, armeabi-v7a, x86_64, x86..."
+	cargo ndk \
+		-t arm64-v8a \
+		-t armeabi-v7a \
+		-t x86_64 \
+		-t x86 \
+		-o ./target/android/jniLibs \
+		build --locked --release
+	mkdir -p ../godot/addons/godot_wry/bin/android/arm64-v8a
+	mkdir -p ../godot/addons/godot_wry/bin/android/armeabi-v7a
+	mkdir -p ../godot/addons/godot_wry/bin/android/x86_64
+	mkdir -p ../godot/addons/godot_wry/bin/android/x86
+	cp ./target/android/jniLibs/arm64-v8a/libgodot_wry.so      ../godot/addons/godot_wry/bin/android/arm64-v8a/
+	cp ./target/android/jniLibs/armeabi-v7a/libgodot_wry.so    ../godot/addons/godot_wry/bin/android/armeabi-v7a/
+	cp ./target/android/jniLibs/x86_64/libgodot_wry.so         ../godot/addons/godot_wry/bin/android/x86_64/
+	cp ./target/android/jniLibs/x86/libgodot_wry.so            ../godot/addons/godot_wry/bin/android/x86/
+
+# Android plugin .aar — the Kotlin/Java side of the GodotPlugin contract.
+# Builds godot_wry/android/plugin into both a Debug AAR and a Release AAR
+# matching the m4gr3d template convention. Output filenames come from
+# `archivesBaseName = pluginName` in plugin/build.gradle:
+#   GodotWry-debug.aar   — used when exporting an Android debug APK
+#   GodotWry-release.aar — used when exporting an Android release APK
+# Both copied into ../godot/addons/godot_wry/bin/android/. The split lets
+# `_get_android_libraries(platform, debug)` in the EditorExportPlugin pick
+# the right variant (which, in turn, makes Godot ship the right
+# `BuildConfig.DEBUG` flag and any debug-only logging in the plugin).
+#
+# Each AAR contains:
+#   - jni/<abi>/libgodot_wry.so     (gradle pulls from godot/addons/godot_wry/bin/android/<abi>/)
+#   - assets/addons/godot_wry/WRY.gdextension  (gradle preBuild copy task)
+#   - classes.jar  (compiled Kotlin from src/main/kotlin/...)
+#   - AndroidManifest.xml  (with `org.godotengine.plugin.v2.GodotWry` tag)
+#
+# The user MUST enable "Use Gradle Build" in their Android export preset for
+# the plugin discovery to work — Godot's prebuilt APK templates skip user
+# .aar files entirely. Requires JDK 17 + Android SDK Build-Tools.
+build-android-aar:
+	@echo "Building Android plugin AAR (Debug + Release)..."
+	cd ../android && JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17}" ./gradlew :plugin:assembleDebug :plugin:assembleRelease --no-daemon
+	mkdir -p ../godot/addons/godot_wry/bin/android
+	cp ../android/plugin/build/outputs/aar/GodotWry-debug.aar   ../godot/addons/godot_wry/bin/android/GodotWry-debug.aar
+	cp ../android/plugin/build/outputs/aar/GodotWry-release.aar ../godot/addons/godot_wry/bin/android/GodotWry-release.aar
+	@echo "Plugin AARs ->"
+	@echo "  ../godot/addons/godot_wry/bin/android/GodotWry-debug.aar"
+	@echo "  ../godot/addons/godot_wry/bin/android/GodotWry-release.aar"

@@ -1,0 +1,116 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Single source of truth for plugin name + package — flowed into the
+// AndroidManifest meta-data tag (via `${...}` placeholders) and the
+// Kotlin side (via `BuildConfig.GODOT_PLUGIN_NAME` for `getPluginName()` /
+// `System.loadLibrary`). Avoids repeating the literal `"GodotWry"` /
+// `"org.godotwry.plugin"` strings across manifest + Kotlin + .gdextension
+// + export plugin.
+def pluginName = 'GodotWry'
+def pluginPackageName = 'org.godotwry.plugin'
+
+android {
+    namespace pluginPackageName
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 24
+        consumerProguardFiles 'consumer-rules.pro'
+
+        // Flow the plugin name into the v2 meta-data tag in the manifest
+        // (`org.godotengine.plugin.v2.${godotPluginName}`).
+        manifestPlaceholders = [
+            godotPluginName       : pluginName,
+            godotPluginPackageName: pluginPackageName,
+        ]
+        // Available at runtime as `BuildConfig.GODOT_PLUGIN_NAME` —
+        // GodotWryPlugin uses it for `getPluginName()` and the
+        // `System.loadLibrary(...)` call in its companion-object init.
+        buildConfigField 'String', 'GODOT_PLUGIN_NAME', "\"${pluginName}\""
+        // AAR file is named `<pluginName>-<variant>.aar` (i.e.
+        // `GodotWry-debug.aar` / `GodotWry-release.aar`) instead of the
+        // default `plugin-release.aar`. Matches the m4gr3d template
+        // convention so downstream tooling (export plugins, Godot's
+        // gradle build hook) can find the archive by predictable name.
+        setProperty 'archivesBaseName', pluginName
+    }
+
+    sourceSets {
+        main {
+            // v2 plugin contract: the native .so ships INSIDE this AAR via
+            // jniLibs (gradle merges them into the consumer APK's
+            // lib/<ABI>/ at export time). The Rust output from
+            // `just build-android` already lays the .so out under
+            // ../../godot/addons/godot_wry/bin/android/<ABI>/ in the
+            // ABI-folder layout that AGP expects, so we point jniLibs.srcDirs
+            // straight at that tree without copying.
+            //
+            // `android_aar_plugin = true` in WRY.gdextension tells Godot's
+            // export pipeline to skip its own [dependencies] .so packaging;
+            // otherwise we'd ship the .so twice.
+            jniLibs.srcDirs = ['../../godot/addons/godot_wry/bin/android']
+
+            // Bundle a copy of WRY.gdextension into the AAR's assets/ at
+            // exactly the path the GodotWryPlugin.getPluginGDExtensionLibrariesPaths()
+            // override returns: `res://addons/godot_wry/WRY.gdextension`. With
+            // `android_aar_plugin = true` on Godot's side, the project's own
+            // copy of the .gdextension file gets filtered out of the export —
+            // the AAR-bundled copy fills the gap. Gradle merges this assets
+            // tree into the consumer APK's assets/ so the runtime `res://`
+            // resolution finds it.
+            assets.srcDirs += "$buildDir/generated/wryAssets"
+        }
+    }
+
+    // Stage WRY.gdextension into the AAR's assets at build time. We keep
+    // the canonical copy of the file in the addon source tree
+    // (`godot/addons/godot_wry/WRY.gdextension`) so it stays in sync with
+    // desktop / iOS — they read it from there. Android takes a snapshot
+    // into the AAR. Always-rebuild ensures edits to the source flow through
+    // without `gradle clean` ceremony.
+    tasks.register('stageGdextensionAsset', Copy) {
+        from('../../godot/addons/godot_wry/') { include 'WRY.gdextension' }
+        into "$buildDir/generated/wryAssets/addons/godot_wry/"
+    }
+    tasks.named('preBuild').configure { dependsOn('stageGdextensionAsset') }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    buildFeatures {
+        // No resources, no BuildConfig — keeps the AAR lean.
+        buildConfig true
+    }
+}
+
+dependencies {
+    // Godot's Android library is the source of GodotPlugin / @UsedByGodot /
+    // SignalInfo / Godot. Pulled from Maven Central — Godot publishes
+    // `org.godotengine:godot:<version>.stable` matching every official
+    // release back to 3.5.1, so we can target a specific version cleanly.
+    // compileOnly because at runtime godot-lib is provided by the Godot
+    // APK itself; bundling would conflict at install time.
+    //
+    // Pin to 4.5.x for compileOnly-side API surface. The Godot APIs we use
+    // (GodotPlugin, getPluginGDExtensionLibrariesPaths, onMainCreate,
+    // @UsedByGodot, SignalInfo) are stable across the entire 4.x line, so
+    // this build will run on 4.2+ Godots in practice. We deliberately do
+    // NOT bump to 4.6.x to keep the lower 4.x bound for downstream users.
+    compileOnly 'org.godotengine:godot:4.5.1.stable'
+
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.activity:activity:1.9.3'
+}
+
+// Final AAR is renamed to plugin-release.aar by Gradle by default
+// (build/outputs/aar/plugin-release.aar). The justfile rename target picks it up.

@@ -16,3 +16,10 @@ dist/
 bin/
 .DS_Store
 .env
+
+# Android Gradle build outputs / user-specific paths
+android/.gradle/
+android/build/
+android/plugin/build/
+android/local.properties
+android/.kotlin/

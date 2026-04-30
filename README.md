@@ -81,14 +81,14 @@ Please refer to the [Docs](https://godot-wry.doce.sh) for API reference and in-d
 
 ## 🎯 Supported platforms
 
-| Platform                        | Support        | Web engine                 |
-| ------------------------------- | -------------- | -------------------------- |
-| **Windows (10, 11)**            | ✅ Supported   | WebView2 (Chromium)        |
-| **Mac (Intel, Apple Sillicon)** | ✅ Supported   | WebKit                     |
-| **Linux (X11)**                 | 🚧 Supported\* | WebKitGTK                  |
-| **Android**                     | ⏳ Planned     | Android WebView (Chromium) |
-| **iOS**                         | ⏳ Planned     | WebKit                     |
-| **Browser/HTML5**               | ⏳ Planned     | —                          |
+| Platform                        | Support           | Web engine                 |
+| ------------------------------- | ----------------- | -------------------------- |
+| **Windows (10, 11)**            | ✅ Supported      | WebView2 (Chromium)        |
+| **Mac (Intel, Apple Sillicon)** | ✅ Supported      | WebKit                     |
+| **Linux (X11)**                 | 🚧 Supported\*    | WebKitGTK                  |
+| **Android**                     | ✅ Supported\*\*  | Android WebView (Chromium) |
+| **iOS**                         | ✅ Supported      | WKWebView                  |
+| **Browser/HTML5**               | ⏳ Planned        | —                          |
 
 ### Linux
 
@@ -96,9 +96,25 @@ Please refer to the [Docs](https://godot-wry.doce.sh) for API reference and in-d
 
 \* X11 support only. Transparency is currently not supported. See [#17](https://github.com/doceazedo/godot_wry/issues/17).
 
-### Android/iOS
+### Android
 
-WRY itself already has [mobile support](https://github.com/tauri-apps/wry/blob/dev/MOBILE.md). Contributions to add Android/iOS support in this extension are welcome!
+\*\* Built and verified on the [`mobile-support`](https://github.com/MacacaGames/godot_wry/tree/mobile-support) branch. Requires Godot 4.2+ on the consumer side. Plugin ships as a v2 Android plugin AAR (`GodotWry-debug.aar` / `GodotWry-release.aar`) under `addons/godot_wry/bin/android/`, plus a `libgodot_wry.so` per ABI (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`). Consumer projects must:
+
+1. Enable **Use Gradle Build** in the Android export preset (Godot's prebuilt APK template skips AAR plugins).
+2. Set `[rendering] shader_compiler/shader_cache/enabled=false` in `project.godot` if targeting Android emulator (BlueStacks / Android Studio AVD) — Goldfish OpenGL caches shader state across process restarts and breaks the second launch. Real devices don't need this.
+
+**Upstream-tracking notes:** the Android build currently depends on two unstable behaviors that have fixes in flight upstream:
+
+- **gdext-rust `experimental-threads` feature** (in `rust/Cargo.toml`) is the workaround for [gdext#1423](https://github.com/godot-rust/gdext/issues/1423). The fix landed as [PR #1574](https://github.com/godot-rust/gdext/pull/1574) on 2026-04-30 but isn't in a crates.io release yet (latest is 0.5.2 from 2026-04-28). Once a `>= 0.5.3` is published, drop the feature and pin to that version.
+- **`shader_cache/enabled = false`** in the demo project is a workaround for the Goldfish OpenGL emulator shader-cache issue on Godot 4 GL Compatibility renderer (sibling of [godot#82419](https://github.com/godotengine/godot/issues/82419)). Real-device users don't need it.
+
+### iOS
+
+iOS uses `WKWebView` natively. The plugin's `EditorExportPlugin` automatically adds `-framework WebKit -framework UIKit -framework Foundation` to the Xcode link step. Targets `aarch64-apple-ios` (device); simulator slice is intentionally omitted (real-device development is the supported path). Min iOS 13.0.
+
+### Mobile background reading
+
+WRY itself has [mobile support](https://github.com/tauri-apps/wry/blob/dev/MOBILE.md) for the underlying webview. The Godot integration glue (JNI bridge, v2 plugin AAR, EditorExportPlugin scaffold, Vulkan / GL Compatibility caveats) is documented inline in `android/`, `rust/src/lib.rs`, and `godot/addons/godot_wry/godot_wry_export_plugin.gd`.
 
 ## ❌ Caveats
 

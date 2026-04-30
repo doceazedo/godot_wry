@@ -1,7 +1,16 @@
+// Desktop / iOS arms all pull a native handle off DisplayServer and wrap it in
+// a RawWindowHandle variant. The Android arm returns an Unavailable stub (the
+// real ANativeWindow comes from the Phase 4 plugin shim, not DisplayServer),
+// so these imports are dead on Android.
+#[cfg(not(target_os = "android"))]
 use godot::classes::display_server::HandleType;
+#[cfg(not(target_os = "android"))]
 use godot::classes::DisplayServer;
+#[cfg(not(target_os = "android"))]
 use godot::obj::Singleton;
-use raw_window_handle::{HandleError, HasWindowHandle, RawWindowHandle, WindowHandle};
+use raw_window_handle::{HandleError, HasWindowHandle, WindowHandle};
+#[cfg(not(target_os = "android"))]
+use raw_window_handle::RawWindowHandle;
 
 #[cfg(target_os = "windows")]
 use {
@@ -81,6 +90,16 @@ impl HasWindowHandle for GodotWindow {
                 RawWindowHandle::UiKit(UiKitWindowHandle::new(nn))
             ))
         }
+    }
+
+    // Phase 3 stub: compiles for Android so the .so links into Godot Android
+    // export. wry's Android path uses the `android_setup!()` macro and an
+    // ANativeWindow obtained from the host Activity rather than this raw
+    // window handle. The real plugin shim that bridges Activity / JavaVM and
+    // wires up `android_setup!()` lives in Phase 4.
+    #[cfg(target_os = "android")]
+    fn window_handle(&self) -> Result<WindowHandle<'_>, HandleError> {
+        Err(HandleError::Unavailable)
     }
 
     #[cfg(target_os = "linux")]

@@ -2,6 +2,16 @@
 entry_symbol = "gdext_rust_init"
 compatibility_minimum = 4.1
 reloadable = true
+; v2 plugin AAR ships everything Android-side: the native .so via jniLibs
+; AND a copy of this .gdextension via the AAR's assets/. The flag
+; `android_aar_plugin = true` tells Godot to (a) skip exporting this file
+; from res:// itself and (b) trigger the v2 `getPluginGDExtensionLibrariesPaths`
+; loading path at boot. Both halves are required — without the flag the v2
+; loader stays silent, with the flag but no AAR-bundled copy the loader
+; errors with "Can't open GDExtension dynamic library". The gradle build
+; copies WRY.gdextension into `<aar>/assets/addons/godot_wry/` so the
+; `res://addons/godot_wry/WRY.gdextension` path resolves at runtime.
+android_aar_plugin = true
 
 [libraries]
 linux.debug.x86_64     = "bin/x86_64-unknown-linux-gnu/libgodot_wry.so"
@@ -15,6 +25,15 @@ windows.release.x86_64 = "bin/x86_64-pc-windows-msvc/godot_wry.dll"
 
 ios.debug   = "bin/aarch64-apple-ios/libgodot_wry.xcframework"
 ios.release = "bin/aarch64-apple-ios/libgodot_wry.xcframework"
+
+android.debug.arm64    = "bin/android/arm64-v8a/libgodot_wry.so"
+android.release.arm64  = "bin/android/arm64-v8a/libgodot_wry.so"
+android.debug.arm32    = "bin/android/armeabi-v7a/libgodot_wry.so"
+android.release.arm32  = "bin/android/armeabi-v7a/libgodot_wry.so"
+android.debug.x86_64   = "bin/android/x86_64/libgodot_wry.so"
+android.release.x86_64 = "bin/android/x86_64/libgodot_wry.so"
+android.debug.x86_32   = "bin/android/x86/libgodot_wry.so"
+android.release.x86_32 = "bin/android/x86/libgodot_wry.so"
 
 [icons]
 WebView = "icons/webview.svg"
@@ -36,3 +55,10 @@ linux.release.x86_64 = { "bin/x86_64-unknown-linux-gnu/libgodot_wry.so": "" }
 
 ios.debug   = { "bin/aarch64-apple-ios/libgodot_wry.xcframework" : "" }
 ios.release = { "bin/aarch64-apple-ios/libgodot_wry.xcframework" : "" }
+
+; Android: no [dependencies] entries — the .so ships inside the v2 plugin AAR
+; (`addons/godot_wry/bin/android/godot_wry_plugin.aar`) via gradle's jniLibs,
+; which gradle merges into APK lib/<ABI>/ during the consumer's export. The
+; Android entries in [libraries] above are kept so Godot's runtime knows the
+; platform-feature → basename mapping; OS_Android::open_dynamic_library
+; falls back to the basename and the linker resolves it from lib/<ABI>/.
