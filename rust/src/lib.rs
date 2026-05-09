@@ -115,11 +115,6 @@ impl IControl for WebView {
     }
 
     fn enter_tree(&mut self) {
-        // When the Control is reparented via GDScript (e.g. moved to a
-        // different Window, or temporarily reparented to the scene root
-        // before a Window.hide() call), proactively move the native
-        // webview to the new parent OS window so it survives the old
-        // window's destruction.
         if self.webview.is_some() {
             if let Some(gd_window) = self.base().get_window() {
                 let current_window_id = gd_window.get_window_id();
@@ -139,9 +134,6 @@ impl IControl for WebView {
             return;
         }
 
-        // When a mouse button is pressed outside the webview rect, release
-        // native focus from WebView2 back to the parent window so that
-        // other Godot controls can receive keyboard input.
         if let Ok(mouse_event) = event.try_cast::<InputEventMouseButton>() {
             if mouse_event.is_pressed() {
                 let mouse_pos = self.base().get_global_mouse_position();
@@ -204,8 +196,6 @@ impl WebView {
         }
     }
 
-    /// Build (or rebuild) the native webview on the current OS window.
-    /// Does NOT connect Godot signals — see `create_webview` for that.
     fn build_webview(&mut self) {
         let display_server = DisplayServer::singleton();
         if display_server.get_name() == "headless".into()
@@ -217,7 +207,6 @@ impl WebView {
         #[cfg(target_os = "linux")]
         gtk::init().expect("Failed to initialize GTK");
 
-        // Determine which OS window this Control belongs to
         let window_id = self.base().get_window()
             .map(|w| w.get_window_id())
             .unwrap_or(0);
@@ -292,26 +281,8 @@ impl WebView {
                     
                     if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
                         if let Some(event_type) = json_value.get("type").and_then(|t| t.as_str()) {
-                            // JS clientX/Y are CSS logical pixels, which are the same unit as
-                            // Godot's logical pixels — both abstract away OS DPI independently.
-                            // So viewport coords = global_pos (logical) + clientX/Y (logical).
-                            //
-                            // [2026-03-23 Laurence042] Bug investigation: when content_scale_factor > 1
-                            // (set via Window.content_scale_factor), clicking the top edge of a WebView
-                            // in a layout like:
-                            //   [Button] [Button] [LineEdit]
-                            //   [WebView]
-                            // causes the LineEdit to receive the click (offset by ~scale × global_pos.x),
-                            // while the Buttons above are unaffected. The original code used
-                            // `clientX * devicePixelRatio` and divided by a separately computed scale,
-                            // which was refactored away — all coordinate computation now lives here and
-                            // in resize() only. After the refactor, debug logging showed coords that
-                            // look correct (e.g. vp_y == global_pos.y when clicking the top edge), so
-                            // the hit-testing mismatch is likely a LineEdit-specific Godot issue rather
-                            // than a coordinate mapping error. Left unresolved for now.
                             let global_pos = base.get_global_position();
 
-                            // Mouse position shared by all pointer events.
                             let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                             let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                             let vp_x = global_pos.x + x;
@@ -471,9 +442,6 @@ impl WebView {
                 "res".into(), move |_webview_id, request| get_res_response(request),
             );
 
-        // Register the input-forwarding script as an initialization script so
-        // it is automatically re-injected on every page navigation, not just
-        // the first load.
         let webview_builder = if self.forward_input_events {
             webview_builder.with_initialization_script(r#"
                 document.addEventListener('mousemove', (e) => {
@@ -562,8 +530,6 @@ impl WebView {
         self.resize()
     }
 
-    /// Called from `ready()`. Builds the webview and connects Godot signals.
-    /// Signal connections are only made once; `rebuild_webview` skips them.
     #[func]
     fn create_webview(&mut self) {
         self.build_webview();
@@ -578,10 +544,6 @@ impl WebView {
         self.base().clone().connect("visibility_changed", &Callable::from_object_method(&*self.base(), "update_visibility"));
     }
 
-    /// Reparent the existing webview to a new OS window.
-    /// Called from enter_tree() when the Control is moved between windows.
-    /// Falls back to rebuilding the webview from scratch if native
-    /// reparent fails (e.g. the old native handle was already destroyed).
     fn reparent_webview(&mut self, new_window_id: i32) {
         if self.webview.is_none() { return; }
 
@@ -592,7 +554,6 @@ impl WebView {
                 if let RawWindowHandle::Win32(win32) = wh.as_raw() {
                     let hwnd = win32.hwnd.get() as isize;
 
-                    // Remove WS_CLIPCHILDREN on the new window (same as create)
                     unsafe {
                         let raw_hwnd = HWND(hwnd as _);
                         let current_style = GetWindowLongPtrA(raw_hwnd, GWL_STYLE);
@@ -609,7 +570,6 @@ impl WebView {
             godot_warn!("[Godot WRY] Native reparent failed, falling back to rebuild");
         }
 
-        // Fallback: drop the dead webview and rebuild from scratch
         self.webview.take();
         self.build_webview();
     }
@@ -627,7 +587,6 @@ impl WebView {
     fn resize(&self) {
         if let Some(webview) = &self.webview {
             let rect = if self.full_window_size {
-                // Get the size of the window this Control belongs to
                 let window_size = self.base().get_window()
                     .map(|w| w.get_size())
                     .unwrap_or_else(|| {
@@ -639,7 +598,6 @@ impl WebView {
                     size: PhysicalSize::new(window_size.x, window_size.y).into(),
                 }
             } else {
-                // Convert logical position/size to physical pixels for the OS bounds call.
                 let pos = self.base().get_global_position();
                 let size = self.base().get_size();
                 let (scale_x, scale_y) = self.get_content_scale();
@@ -654,9 +612,6 @@ impl WebView {
         }
     }
 
-    /// Compute the effective scale from viewport (logical) coordinates to
-    /// the native window's physical coordinates.  This accounts for both
-    /// `Window.content_scale_factor` and `content_scale_size` / `content_scale_mode`.
     fn get_content_scale(&self) -> (f32, f32) {
         if let Some(window) = self.base().get_window() {
             let window_size = window.get_size();
@@ -687,13 +642,6 @@ impl WebView {
             match webview.set_visible(visibility) {
                 Ok(_) => self.resize(),
                 Err(e) => {
-                    // This typically happens when the parent OS window has been
-                    // destroyed (e.g. Window.hide()). To avoid this, reparent
-                    // the WebView node to the scene root BEFORE calling
-                    // Window.hide(), then reparent it back AFTER Window.show().
-                    // The WebView will detect the window change in enter_tree()
-                    // and automatically move its native handle to the new
-                    // parent window.
                     godot_warn!("[Godot WRY] Could not set webview visibility: {e}. \
                         If you are using Window.hide()/show(), reparent the WebView \
                         node out of the Window before hide() and back after show() \

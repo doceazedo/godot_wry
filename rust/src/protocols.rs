@@ -28,12 +28,6 @@ pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]
         let index_path_str = GString::from(index_path.to_str().unwrap_or_default());
         if FileAccess::file_exists(&index_path_str) {
             if !uri.path().ends_with('/') {
-                // URL has no trailing slash — serve a small JS redirect page so the browser
-                // navigates to the URL with a trailing slash. This ensures relative paths
-                // (e.g. "css/style.css") resolve correctly against the directory.
-                // We can't use HTTP 301 because custom protocol responses don't go through
-                // the browser's network stack, so redirects are not followed.
-                // WRY maps "res://" to "http://res." internally, so we must use that format.
                 let redirect_url = format!(
                     "http://res.{}{}/",
                     uri.host().unwrap_or_default(),
