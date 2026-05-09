@@ -56,7 +56,7 @@ jobs:
           APPLE_DEV_PASSWORD: ${{ secrets.APPLE_DEV_PASSWORD }}
           APPLE_DEV_APP_ID: ${{ secrets.APPLE_DEV_APP_ID }}
         run: |
-          brew install --cask powershell
+          brew install powershell
           pwsh ./scripts/ci_sign_macos.ps1 godot/addons/godot_wry/bin/universal-apple-darwin/libgodot_wry.framework
 
       - name: Upload artifacts
