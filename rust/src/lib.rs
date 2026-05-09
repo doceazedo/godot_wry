@@ -1,10 +1,12 @@
+#[macro_use]
+mod macros;
 mod godot_window;
 mod protocols;
 
 use godot::global::MouseButtonMask;
 use godot::init::*;
 use godot::prelude::*;
-use godot::classes::{Control, DisplayServer, IControl, Input, InputEventMouseButton, InputEventMouseMotion, InputEventKey, ProjectSettings};
+use godot::classes::{Control, DisplayServer, IControl, InputEvent, InputEventMouseButton, InputEventMouseMotion, InputEventKey, ProjectSettings, Viewport};
 use godot::global::{Key, MouseButton};
 use lazy_static::lazy_static;
 use serde_json;
@@ -23,6 +25,7 @@ use {
     raw_window_handle::{HasWindowHandle, RawWindowHandle},
     windows::Win32::Foundation::HWND,
     windows::Win32::UI::WindowsAndMessaging::{GetWindowLongPtrA, SetWindowLongPtrA, GWL_STYLE},
+    wry::WebViewExtWindows,
 };
 
 // Required for Windows to link against the wevtapi library for webview2,
@@ -41,9 +44,11 @@ unsafe impl ExtensionLibrary for GodotWRY {}
 struct WebView {
     base: Base<Control>,
     webview: Option<wry::WebView>,
-    previous_screen_position: Vector2,
+    window_id: i32,
+    previous_global_position: Vector2,
     previous_viewport_size: Vector2i,
     previous_window_position: Vector2i,
+    previous_content_scale_factor: f32,
     #[export]
     full_window_size: bool,
     #[export]
@@ -82,9 +87,11 @@ impl IControl for WebView {
         Self {
             base,
             webview: None,
-            previous_screen_position: Vector2::default(),
+            window_id: 0,
+            previous_global_position: Vector2::default(),
             previous_viewport_size: Vector2i::default(),
             previous_window_position: Vector2i::default(),
+            previous_content_scale_factor: 1.0,
             full_window_size: true,
             url: "https://github.com/doceazedo/godot_wry".into(),
             html: "".into(),
@@ -107,8 +114,38 @@ impl IControl for WebView {
         self.create_webview();
     }
 
+    fn enter_tree(&mut self) {
+        if self.webview.is_some() {
+            if let Some(gd_window) = self.base().get_window() {
+                let current_window_id = gd_window.get_window_id();
+                if current_window_id != self.window_id {
+                    self.reparent_webview(current_window_id);
+                }
+            }
+        }
+    }
+
     fn process(&mut self, _delta: f64) {
         self.update_webview();
+    }
+
+    fn input(&mut self, event: Gd<InputEvent>) {
+        if self.webview.is_none() || self.full_window_size {
+            return;
+        }
+
+        if let Ok(mouse_event) = event.try_cast::<InputEventMouseButton>() {
+            if mouse_event.is_pressed() {
+                let mouse_pos = self.base().get_global_mouse_position();
+                let rect = self.base().get_global_rect();
+
+                if !rect.contains_point(mouse_pos) {
+                    if let Some(webview) = &self.webview {
+                        let _ = webview.focus_parent();
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -125,30 +162,41 @@ impl WebView {
 
     #[func]
     fn update_webview(&mut self) {
-        if let Some(_) = &self.webview {
-            let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
-            let window_position = DisplayServer::singleton().window_get_position();
+        if self.webview.is_none() {
+            return;
+        }
 
-            let needs_resize = self.base().get_screen_position() != self.previous_screen_position
-                || viewport_size != self.previous_viewport_size
-                || window_position != self.previous_window_position;
+        let viewport_size = self.base().get_window()
+            .map(|w| w.get_size())
+            .unwrap_or_else(|| {
+                self.base().get_tree().expect("Could not get tree")
+                    .get_root().expect("Could not get viewport").get_size()
+            });
+        let window_position = DisplayServer::singleton().window_get_position_ex().window_id(self.window_id).done();
+        let content_scale_factor = self.base().get_window()
+            .map(|w| w.get_content_scale_factor())
+            .unwrap_or(1.0);
 
-            if needs_resize {
-                self.previous_screen_position = self.base().get_screen_position();
-                self.previous_viewport_size = viewport_size;
-                self.previous_window_position = window_position;
-                self.resize();
-            }
+        let needs_resize = self.base().get_global_position() != self.previous_global_position
+            || viewport_size != self.previous_viewport_size
+            || window_position != self.previous_window_position
+            || content_scale_factor != self.previous_content_scale_factor;
 
-            #[cfg(target_os = "linux")]
-            while gtk::events_pending() {
-                gtk::main_iteration_do(false);
-            }
+        if needs_resize {
+            self.previous_global_position = self.base().get_global_position();
+            self.previous_viewport_size = viewport_size;
+            self.previous_window_position = window_position;
+            self.previous_content_scale_factor = content_scale_factor;
+            self.resize();
+        }
+
+        #[cfg(target_os = "linux")]
+        while gtk::events_pending() {
+            gtk::main_iteration_do(false);
         }
     }
 
-    #[func]
-    fn create_webview(&mut self) {
+    fn build_webview(&mut self) {
         let display_server = DisplayServer::singleton();
         if display_server.get_name() == "headless".into()
         {
@@ -159,7 +207,12 @@ impl WebView {
         #[cfg(target_os = "linux")]
         gtk::init().expect("Failed to initialize GTK");
 
-        let window = GodotWindow;
+        let window_id = self.base().get_window()
+            .map(|w| w.get_window_id())
+            .unwrap_or(0);
+        self.window_id = window_id;
+
+        let window = GodotWindow::new(window_id);
 
         // remove WS_CLIPCHILDREN from the window style
         // otherwise, transparent on windows won't work
@@ -228,30 +281,34 @@ impl WebView {
                     
                     if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(body) {
                         if let Some(event_type) = json_value.get("type").and_then(|t| t.as_str()) {
+                            let global_pos = base.get_global_position();
+
+                            let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                            let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
+                            let vp_x = global_pos.x + x;
+                            let vp_y = global_pos.y + y;
+
                             match event_type {
                                 "_mouse_move" => {
-                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    
                                     let movement_x = json_value.get("movementX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let movement_y = json_value.get("movementY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     
                                     let mut event = InputEventMouseMotion::new_gd();
-                                    event.set_position(Vector2::new(x, y));
-                                    event.set_global_position(Vector2::new(x, y));
+                                    event.set_position(Vector2::new(vp_x, vp_y));
+                                    event.set_global_position(Vector2::new(vp_x, vp_y));
                                     
                                     let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
                                     event.set_button_mask(*button_mask);
 
                                     event.set_relative(Vector2::new(movement_x, movement_y));
                                     
-                                    Input::singleton().parse_input_event(&event);
+                                    if let Some(mut viewport) = base.get_viewport() {
+                                        viewport.push_input(&event);
+                                    }
                                     return;
                                 },
                                 
                                 "_mouse_down" | "_mouse_up" => {
-                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let button = json_value.get("button").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                                     
                                     let godot_button = match button {
@@ -299,24 +356,24 @@ impl WebView {
                                     
                                     let mut event = InputEventMouseButton::new_gd();
                                     event.set_button_index(godot_button);
-                                    event.set_position(Vector2::new(x, y));
-                                    event.set_global_position(Vector2::new(x, y));
+                                    event.set_position(Vector2::new(vp_x, vp_y));
+                                    event.set_global_position(Vector2::new(vp_x, vp_y));
                                     event.set_pressed(pressed);
                                     
                                     let button_mask = CURRENT_BUTTON_MASK.lock().unwrap();
                                     event.set_button_mask(*button_mask);
                                     
-                                    Input::singleton().parse_input_event(&event);
+                                    if let Some(mut viewport) = base.get_viewport() {
+                                        viewport.push_input(&event);
+                                    }
                                     return;
                                 },
 
                                 "_mouse_wheel" => {
-                                    let x = json_value.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
-                                    let y = json_value.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let delta_x = json_value.get("deltaX").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
                                     let delta_y = json_value.get("deltaY").and_then(|v| v.as_f64()).unwrap_or(0.0) as f32;
 
-                                    let position = Vector2::new(x, y);
+                                    let position = Vector2::new(vp_x, vp_y);
                                     let button_mask = *CURRENT_BUTTON_MASK.lock().unwrap();
                                     let modifiers = (
                                         json_value.get("shift").and_then(|v| v.as_bool()).unwrap_or(false),
@@ -325,16 +382,18 @@ impl WebView {
                                         json_value.get("meta").and_then(|v| v.as_bool()).unwrap_or(false),
                                     );
 
+                                    let viewport = base.get_viewport();
+
                                     if delta_y != 0.0 {
                                         let button = if delta_y < 0.0 { MouseButton::WHEEL_UP } else { MouseButton::WHEEL_DOWN };
                                         let factor = (delta_y.abs() / 100.0).max(1.0);
-                                        send_wheel_event(button, position, factor, button_mask, modifiers);
+                                        send_wheel_event(button, position, factor, button_mask, modifiers, &viewport);
                                     }
 
                                     if delta_x != 0.0 {
                                         let button = if delta_x < 0.0 { MouseButton::WHEEL_LEFT } else { MouseButton::WHEEL_RIGHT };
                                         let factor = (delta_x.abs() / 100.0).max(1.0);
-                                        send_wheel_event(button, position, factor, button_mask, modifiers);
+                                        send_wheel_event(button, position, factor, button_mask, modifiers, &viewport);
                                     }
 
                                     return;
@@ -348,13 +407,14 @@ impl WebView {
                                     
                                     event.set_keycode(godot_key);
                                     event.set_pressed(event_type == "_key_down");
-
                                     event.set_shift_pressed(json_value.get("shift").and_then(|v| v.as_bool()).unwrap_or(false));
                                     event.set_ctrl_pressed(json_value.get("ctrl").and_then(|v| v.as_bool()).unwrap_or(false));
                                     event.set_alt_pressed(json_value.get("alt").and_then(|v| v.as_bool()).unwrap_or(false));
                                     event.set_meta_pressed(json_value.get("meta").and_then(|v| v.as_bool()).unwrap_or(false));
                                     
-                                    Input::singleton().parse_input_event(&event);
+                                    if let Some(mut viewport) = base.get_viewport() {
+                                        viewport.push_input(&event);
+                                    }
                                     return;
                                 },
                                 
@@ -382,29 +442,16 @@ impl WebView {
                 "res".into(), move |_webview_id, request| get_res_response(request),
             );
 
-        if !self.url.is_empty() && !self.html.is_empty() {
-            godot_error!("[Godot WRY] You have entered both a URL and HTML code. You may only enter one at a time.")
-        }
-
-        let webview = webview_builder.build_as_child(&window).unwrap();
-        self.webview.replace(webview);
-
-        let mut viewport = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport");
-        viewport.connect("size_changed", &Callable::from_object_method(&*self.base(), "resize"));
-
-        self.base().clone().connect("resized", &Callable::from_object_method(&*self.base(), "resize"));
-        self.base().clone().connect("visibility_changed", &Callable::from_object_method(&*self.base(), "update_visibility"));
-
-        if self.forward_input_events {
-            let forward_script = r#"
+        let webview_builder = if self.forward_input_events {
+            webview_builder.with_initialization_script(r#"
                 document.addEventListener('mousemove', (e) => {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_move',
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
-                        movementX: e.movementX * window.devicePixelRatio,
-                        movementY: e.movementY * window.devicePixelRatio,
+                        x: e.clientX,
+                        y: e.clientY,
+                        movementX: e.movementX,
+                        movementY: e.movementY,
                         button: e.button
                     }));
                 });
@@ -412,17 +459,17 @@ impl WebView {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_down',
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
+                        x: e.clientX,
+                        y: e.clientY,
                         button: e.button
                     }));
                 });
                 document.addEventListener('mouseup', (e) => {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
-                        type: '_mouse_up', 
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
+                        type: '_mouse_up',
+                        x: e.clientX,
+                        y: e.clientY,
                         button: e.button
                     }));
                 });
@@ -430,8 +477,8 @@ impl WebView {
                     if (!document.hasFocus()) return;
                     window.ipc.postMessage(JSON.stringify({
                         type: '_mouse_wheel',
-                        x: e.clientX * window.devicePixelRatio,
-                        y: e.clientY * window.devicePixelRatio,
+                        x: e.clientX,
+                        y: e.clientY,
                         deltaX: e.deltaX,
                         deltaY: e.deltaY,
                         shift: e.shiftKey,
@@ -468,14 +515,63 @@ impl WebView {
                         meta: isModifier ? false : e.metaKey
                     }));
                 });
-            "#;
-            
-            if let Some(ref webview) = self.webview {
-                let _ = webview.evaluate_script(forward_script);
-            }
+            "#)
+        } else {
+            webview_builder
+        };
+
+        if !self.url.is_empty() && !self.html.is_empty() {
+            godot_error!("[Godot WRY] You have entered both a URL and HTML code. You may only enter one at a time.")
         }
 
+        let webview = webview_builder.build_as_child(&window).unwrap();
+        self.webview.replace(webview);
+
         self.resize()
+    }
+
+    #[func]
+    fn create_webview(&mut self) {
+        self.build_webview();
+        if self.webview.is_none() {
+            return;
+        }
+
+        let mut viewport = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport");
+        viewport.connect("size_changed", &Callable::from_object_method(&*self.base(), "resize"));
+
+        self.base().clone().connect("resized", &Callable::from_object_method(&*self.base(), "resize"));
+        self.base().clone().connect("visibility_changed", &Callable::from_object_method(&*self.base(), "update_visibility"));
+    }
+
+    fn reparent_webview(&mut self, new_window_id: i32) {
+        if self.webview.is_none() { return; }
+
+        #[cfg(target_os = "windows")]
+        {
+            let window = GodotWindow::new(new_window_id);
+            if let Ok(wh) = window.window_handle() {
+                if let RawWindowHandle::Win32(win32) = wh.as_raw() {
+                    let hwnd = win32.hwnd.get() as isize;
+
+                    unsafe {
+                        let raw_hwnd = HWND(hwnd as _);
+                        let current_style = GetWindowLongPtrA(raw_hwnd, GWL_STYLE);
+                        SetWindowLongPtrA(raw_hwnd, GWL_STYLE, current_style & !0x02000000);
+                    };
+
+                    if self.webview.as_ref().unwrap().reparent(hwnd).is_ok() {
+                        self.window_id = new_window_id;
+                        self.resize();
+                        return;
+                    }
+                }
+            }
+            godot_warn!("[Godot WRY] Native reparent failed, falling back to rebuild");
+        }
+
+        self.webview.take();
+        self.build_webview();
     }
 
     #[func]
@@ -491,21 +587,45 @@ impl WebView {
     fn resize(&self) {
         if let Some(webview) = &self.webview {
             let rect = if self.full_window_size {
-                let viewport_size = self.base().get_tree().expect("Could not get tree").get_root().expect("Could not get viewport").get_size();
+                let window_size = self.base().get_window()
+                    .map(|w| w.get_size())
+                    .unwrap_or_else(|| {
+                        self.base().get_tree().expect("Could not get tree")
+                            .get_root().expect("Could not get viewport").get_size()
+                    });
                 Rect {
                     position: PhysicalPosition::new(0, 0).into(),
-                    size: PhysicalSize::new(viewport_size.x, viewport_size.y).into(),
+                    size: PhysicalSize::new(window_size.x, window_size.y).into(),
                 }
             } else {
-                let pos = self.base().get_screen_position();
+                let pos = self.base().get_global_position();
                 let size = self.base().get_size();
+                let (scale_x, scale_y) = self.get_content_scale();
+                let phys_x = (pos.x * scale_x).round();
+                let phys_y = (pos.y * scale_y).round();
                 Rect {
-                    position: PhysicalPosition::new(pos.x, pos.y).into(),
-                    size: PhysicalSize::new(size.x, size.y).into(),
+                    position: PhysicalPosition::new(phys_x, phys_y).into(),
+                    size: PhysicalSize::new(size.x * scale_x, size.y * scale_y).into(),
                 }
             };
             let _ = webview.set_bounds(rect);
         }
+    }
+
+    fn get_content_scale(&self) -> (f32, f32) {
+        if let Some(window) = self.base().get_window() {
+            let window_size = window.get_size();
+            if let Some(viewport) = self.base().get_viewport() {
+                let vp_size = viewport.get_visible_rect().size;
+                if vp_size.x > 0.0 && vp_size.y > 0.0 {
+                    return (
+                        window_size.x as f32 / vp_size.x,
+                        window_size.y as f32 / vp_size.y,
+                    );
+                }
+            }
+        }
+        (1.0, 1.0)
     }
 
     #[func]
@@ -519,8 +639,15 @@ impl WebView {
     fn update_visibility(&self) {
         if let Some(webview) = &self.webview {
             let visibility = self.base().is_visible_in_tree();
-            webview.set_visible(visibility).expect("Could not set visibility");
-            self.resize()
+            match webview.set_visible(visibility) {
+                Ok(_) => self.resize(),
+                Err(e) => {
+                    godot_warn!("[Godot WRY] Could not set webview visibility: {e}. \
+                        If you are using Window.hide()/show(), reparent the WebView \
+                        node out of the Window before hide() and back after show() \
+                        so the native handle can survive the window destruction.");
+                }
+            }
         }
     }
 
@@ -623,6 +750,7 @@ fn send_wheel_event(
     factor: f32,
     button_mask: MouseButtonMask,
     modifiers: (bool, bool, bool, bool),
+    viewport: &Option<Gd<Viewport>>,
 ) {
     let (shift, ctrl, alt, meta) = modifiers;
     for pressed in [true, false] {
@@ -637,7 +765,9 @@ fn send_wheel_event(
         event.set_ctrl_pressed(ctrl);
         event.set_alt_pressed(alt);
         event.set_meta_pressed(meta);
-        Input::singleton().parse_input_event(&event);
+        if let Some(vp) = viewport {
+            vp.clone().push_input(&event);
+        }
     }
 }
 

@@ -10,24 +10,49 @@ use std::path::PathBuf;
 
 pub fn get_res_response(request: Request<Vec<u8>>) -> Response<Cow<'static, [u8]>> {
     let root = PathBuf::from("res://");
+    let uri = request.uri().clone();
     let path = format!(
         "{}{}",
-        request.uri().host().unwrap_or_default(),
-        request.uri().path()
+        uri.host().unwrap_or_default(),
+        uri.path()
     );
-    let mut full_path = root.join(path);
+    let mut full_path = root.join(&path);
 
-    if full_path.ends_with("/") || full_path.is_dir() || full_path.extension().is_none() {
+    debug_print!("[WRY Protocol] Request: {} | scheme={} host={} path={}", uri, uri.scheme_str().unwrap_or("?"), uri.host().unwrap_or("?"), uri.path());
+    debug_print!("[WRY Protocol] Resolved full_path: {:?}", full_path);
+
+    let mut full_path_str = GString::from(full_path.to_str().unwrap_or_default());
+    if !FileAccess::file_exists(&full_path_str) {
+        debug_print!("[WRY Protocol] File not found: {:?}, trying index.html fallback", full_path);
         let index_path = full_path.join("index.html");
-        
-        if FileAccess::file_exists(&GString::from(index_path.to_str().unwrap_or_default())) {
+        let index_path_str = GString::from(index_path.to_str().unwrap_or_default());
+        if FileAccess::file_exists(&index_path_str) {
+            if !uri.path().ends_with('/') {
+                let redirect_url = format!(
+                    "http://res.{}{}/",
+                    uri.host().unwrap_or_default(),
+                    uri.path()
+                );
+                debug_print!("[WRY Protocol] No trailing slash, JS redirect -> {}", redirect_url);
+                let redirect_html = format!(
+                    "<!DOCTYPE html><html><head><script>location.replace(\"{}\")</script></head></html>",
+                    redirect_url
+                );
+                return http::Response::builder()
+                    .header(CONTENT_TYPE, "text/html")
+                    .status(200)
+                    .body(Cow::from(redirect_html.into_bytes()))
+                    .expect("Failed to build redirect response");
+            } else {
+                debug_print!("[WRY Protocol] Trailing slash present, serving index.html directly: {:?}", index_path);
+            }
             full_path = index_path;
+            full_path_str = index_path_str;
         }
     }
 
-    let full_path_str = GString::from(full_path.to_str().unwrap_or_default());
-
     if !FileAccess::file_exists(&full_path_str) {
+        debug_print!("[WRY Protocol] 404 Not Found: {:?}", full_path);
         return http::Response::builder()
             .header(CONTENT_TYPE, "text/plain")
             .status(404)
