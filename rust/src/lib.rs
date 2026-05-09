@@ -424,7 +424,7 @@ impl WebView {
                     }
                     
                     // if we get here, this is a regular IPC message
-                    base.emit_signal("ipc_message", &[body.to_variant()]);
+                    base.call_deferred("emit_signal", &["ipc_message".to_variant(), body.to_variant()]); 
                 }
             })
             .with_on_page_load_handler({
@@ -433,8 +433,8 @@ impl WebView {
                     let mut base = base.lock().unwrap();
 
                     match event {
-                        PageLoadEvent::Started => base.emit_signal("page_load_started", &[url.to_variant()]),
-                        PageLoadEvent::Finished => base.emit_signal("page_load_finished", &[url.to_variant()]),
+                        PageLoadEvent::Started => base.call_deferred("emit_signal", &["page_load_started".to_variant(), url.to_variant()]),
+                        PageLoadEvent::Finished => base.call_deferred("emit_signal", &["page_load_finished".to_variant(), url.to_variant()]),
                     };
                 }
             })
@@ -671,7 +671,16 @@ impl WebView {
 
         if let Some(stripped) = url_str.strip_prefix("res://") {
             let path = stripped.replace("\\", "/");
-            url_str = format!("http://res.{}", path);
+            
+            #[cfg(target_os = "linux")]
+            {
+                url_str = format!("res://{}", path);
+            }
+
+            #[cfg(not(target_os = "linux"))]
+            {
+                url_str = format!("http://res.{}", path);
+            }
         }
 
         if let Some(webview) = &self.webview {
